@@ -1,0 +1,32 @@
+/**
+ * このファイルの内容を変更してはいけません。
+ */
+ {
+    "include": ["./src**/*.ts", "src/lib/**/*.ts" ],
+    "exclude": ["../node_modules/*" ],
+    "compilerOptions": {
+      "target": "esnext",
+      "module": "esnext",
+      "moduleResolution": "node",
+      "ignoreDeprecations": "6.0",
+      "types": ["node"],
+      "lib": ["esnext", "DOM", "DOM.Iterable"],
+      "skipLibCheck": true,
+
+      "importHelpers": true,
+      /* Bundler mode */
+      "allowImportingTsExtensions": true,
+      
+      /*すべての.tsファイルを強制的にモジュール（独立したスコープを持つファイル）として扱うための設定*/
+      "moduleDetection": "force", 
+
+      /*TypeScriptのコンパイル時にJavaScriptファイルや型定義ファイルなどの成果物を出力（生成）しない*/
+      "noEmit": true,
+  
+      /* Linting */
+      "strict": true,
+      "noUnusedLocals": true,
+      "noFallthroughCasesInSwitch": true,
+      "sourceMap": true
+    }
+  }

@@ -1,0 +1,19 @@
+{
+    "name": "typescript_game_practice",
+    "version": "0.0.1",
+    "main": "index.js",
+    "type": "module",
+    "scripts": {
+        "dev": "vite --open",
+        "build": "vite build --emptyOutDir --base=/typeScratchPractice/"
+    },
+    "author": "amami-harhid",
+    "license": "AGPL-3.0-only",
+    "description": "",
+    "devDependencies": {
+        "@types/node": "^25.9.1",
+        "glob": "^10.5.0",
+        "typescript": "^6.0.3",
+        "vite": "^8.2.1"
+    }
+}
