@@ -2,7 +2,7 @@
  * このファイルの内容を変更してはいけません。
  */
  {
-    "include": ["./src**/*.ts", "src/lib/**/*.ts" ],
+    "include": ["./src/**/*.ts", "src/lib/**/*.ts", "./*.d.ts", "src/testV2/008/stage/basets" ],
     "exclude": ["../node_modules/*" ],
     "compilerOptions": {
       "target": "esnext",
