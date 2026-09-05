@@ -1,6 +1,7 @@
 import { Canvas } from "../canvas";
-import { Stage } from "../stage";
+import { Engine } from "../engine";
 export class Sprite {
+    private _engine: Engine;
     private _scale = {w: 1, h: 1};
     private _degree = 0;
     private _diagonalLineLength = 0;
@@ -11,7 +12,8 @@ export class Sprite {
     private _svgBaseHeight: number = 0;
     private _position: {x: number, y: number} = {x: 0, y: 0};
     constructor() {
-        Stage.sprites.push(this);
+        this._engine = Engine.getInstance();
+        this._engine.sprites.push(this);
     }
     set position (_position: {x: number, y: number}) {
         this._position.x = _position.x;
@@ -29,10 +31,12 @@ export class Sprite {
     get scale() {
         return this._scale;
     }
-    
     set scale( _scale:{w: number, h: number} ) {
         this._scale.w = _scale.w;
         this._scale.h = _scale.h;
+    }
+    private rescale() {
+
         // 回転してもはみ出さない安全なサイズ（元サイズの対角線の長さ）
         const _size = Math.max(this._svgBaseWidth*Math.abs(this._scale.w), this._svgBaseHeight*Math.abs(this._scale.h));
         this._diagonalLineLength = Math.sqrt( _size**2 + _size**2 ) * Canvas.dpr;
@@ -40,6 +44,7 @@ export class Sprite {
         this._canvas.width = this._diagonalLineLength;
         this._canvas.height = this._diagonalLineLength;        
         this._ctx.fillStyle = '#00000000'; // 透明
+
     }
     setSvgImage( image: string ) {
         this._svgImg = new Image();
@@ -67,6 +72,7 @@ export class Sprite {
         return this._diagonalLineLength;
     }
     draw() {
+        this.rescale();
         this._degree = this._degree % 360;
         // 前のフレームの描画を消去する
         this._ctx.clearRect(0, 0, this._diagonalLineLength, this._diagonalLineLength);
@@ -78,5 +84,19 @@ export class Sprite {
         // 中心を軸にSVGを描画
         this._ctx.drawImage(this._svgImg, -this._svgBaseWidth / 2, -this._svgBaseHeight / 2, this._svgBaseWidth, this._svgBaseHeight);
         this._ctx.restore();
+
+            const _position = this.position;
+            const targetX = _position.x;
+            const targetY = _position.y;
+            const _canvas = this.canvas;
+            const _size = this.diagonalLineLength;
+            this._engine.mainCtx.drawImage(
+                _canvas, 
+                targetX - _size / 2, 
+                targetY - _size / 2, 
+                _size, 
+                _size
+            );
+
     }
 }
