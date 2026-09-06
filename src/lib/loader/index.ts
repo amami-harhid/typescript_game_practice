@@ -14,4 +14,17 @@ export class Loader {
         })
     }
 
+    static async loadSvgImage(svg: string, callback: CallableFunction) {
+
+        const _image = new Image();
+        return new Promise<void>(resolve=>{
+            _image.onload = () => {
+                callback(_image);
+                resolve();
+            };
+            _image.src = svg;
+        });
+        
+    }
+
 }

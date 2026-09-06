@@ -1,23 +1,26 @@
 import { Loader } from "../../../lib/loader";
 import { Canvas } from "../canvas";
 
-export class CostumeImage {
-
-    private _svgPath: string;
+export class SvgImage {
     private _image!: HTMLImageElement;
+    private _svgPath: string;
     private _width: number = 0;
     private _height: number = 0;
     private _canvas! : HTMLCanvasElement;
     private _ctx! : CanvasRenderingContext2D;
     private _scale : {w:number, h:number};
     private _diagonalLineLength: number = 0;
+    private _loadCompleted = false;
     constructor( svgPath: string) {
         this._svgPath = svgPath;
         this._scale = {w: 100, h: 100};
     }
     async load() {
+        if( this._loadCompleted === true){
+            return;
+        }
         const svgText = await Loader.loadSvg(this._svgPath);
-        Loader.loadSvgImage(svgText, (_image: HTMLImageElement)=>{
+        await Loader.loadSvgImage(svgText, (_image: HTMLImageElement)=>{
             // naturalWidth, naturalHeight ～　画像の元の大きさ
             this._width = _image.naturalWidth || _image.width || 100;
             this._height = _image.naturalHeight || _image.height || 100;
@@ -31,6 +34,7 @@ export class CostumeImage {
             this._canvas.height = this._diagonalLineLength;
             this._ctx.fillStyle = '#00000000'; // 透明
             this._image = _image;
+            this._loadCompleted = true;
         });
     }
     get width() {
@@ -38,9 +42,6 @@ export class CostumeImage {
     }
     get height() {
         return this._height;
-    }
-    get image() {
-        return this._image;
     }
     get diagonalLineLength() {
         return this._diagonalLineLength;
@@ -53,6 +54,9 @@ export class CostumeImage {
     }
     get ctx() {
         return this._ctx;
+    }
+    get image() {
+        return this._image;
     }
     get scale() {
         return this._scale;

@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint";
 
 const build_eslint_config = [
     {
-        ignores: ["**/*.d.ts", "./src/lib/**/*.ts", "./src/vitePlugins/**/*.ts", "node_modules/**/*", "./*.js"],
+        ignores: ["**/*.d.ts", "./src/lib/**/*.ts", "./vitePlugins/**/*.ts", "node_modules/**/*", "./*.js"],
     },
     {
         files: ["./src/test/**/*.ts","./src/testV2/**/*.ts"],

@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import { isTarget, createYieldStatement, hasSkipComment, isTargetEventAssignment, isAwaitTargetCall } from '../utils/plugins-helpers.ts';
+import { isTarget, createYieldStatement, hasSkipComment, isTargetEventAssignment, isAwaitTargetCallWithComment } from '../utils/plugins-helpers.ts';
 
 export interface PluginError extends Error {
     loc?: {
@@ -152,7 +152,7 @@ function convertToAsyncGenerator(
     );
 }
 
-export const createTransformer = (id: string, context: ts.TransformationContext): ts.Transformer<ts.SourceFile> => {
+export const createTransformer = (id: string, context: ts.TransformationContext, typeChecker: ts.TypeChecker): ts.Transformer<ts.SourceFile> => {
     return (sf: ts.SourceFile) => {
     
         const targetVariableNames = new Set<string>();
@@ -169,8 +169,9 @@ export const createTransformer = (id: string, context: ts.TransformationContext)
         preScan(sf);
 
         function visit(node: ts.Node, inLoop = false): ts.Node {
-      
-            if (isAwaitTargetCall(node) && node.parent && !ts.isAwaitExpression(node.parent)) {
+
+            // isAwaitTargetCallWithCommentの引数を typeChecker とした
+            if (isAwaitTargetCallWithComment(node, typeChecker) && node.parent && !ts.isAwaitExpression(node.parent)) {
                 // 先に子ノード（引数など）の内部変換を再帰処理したノードを作成
                 const visitedCall = ts.visitEachChild(node, (n) => visit(n, inLoop), context) as ts.CallExpression;
                 // それを await 演算子で包んで返す

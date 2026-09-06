@@ -64,19 +64,18 @@ const loop03 = function(this:Sprite) {
         counter += 1;
     }
 }
-/** スプライトのスレッド( コスチューム切り替え ) */
-const loop04 = function(this:Sprite) {
-    for(;;){
-        this.costume.next();
-        this.Control.wait(0.1);
-    }
-}
 
 // スレッドを登録 ( 並行動作する )
 sprite.Thread.func = loop02;
 sprite.Thread.func = loop01;
 sprite.Thread.func = loop03;
-sprite.Thread.func = loop04;
+/** スプライトのスレッド( コスチューム切り替え ) */
+sprite.Thread.func = function(this:Sprite) {
+    for(;;){
+        this.costume.next();
+        this.Control.wait(0.1);
+    }
+};
 
 // スレッドを実行
 Engine.run();

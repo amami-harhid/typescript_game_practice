@@ -1,12 +1,12 @@
 import { Sprite } from ".";
 import { Canvas } from "../canvas";
 import { Engine } from "../engine";
+import { SvgImage } from "../svgImage";
 import { SpriteBase } from "./base";
-import { CostumeImage } from "./costumeImage";
 
 export class Costume {
 
-    private _images: CostumeImage[] = [];
+    private _images: SvgImage[] = [];
     private _currentNo = -1;
     private _sprite: Sprite;
     constructor(sprite:SpriteBase) {
@@ -14,7 +14,7 @@ export class Costume {
     }
 
     addSvg( svgPath : string) {
-        const _image = new CostumeImage( svgPath );
+        const _image = new SvgImage( svgPath );
         this._images.push( _image );
         this._currentNo = 0; // 最初のイメージが現在の表示画像
     }

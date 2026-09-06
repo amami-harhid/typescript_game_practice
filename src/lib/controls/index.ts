@@ -1,4 +1,9 @@
-export const wait = async (seconds: number)=>{
+/**
+ * 待つ
+ * @param seconds 
+ * @returns 
+ */
+export const controlWait = async (seconds: number)=>{
     return new Promise<void>(resolve=>{
         setTimeout(()=>{
             resolve();

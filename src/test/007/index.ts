@@ -57,7 +57,7 @@ const loop03 = async function*(this:Sprite) {
 const loop04 = async function*(this:Sprite) {
     for(;;){
         this.costume.next();
-        await Control.wait(0.1);
+        await Control.controlWait(0.1);
         yield;
     }
 }

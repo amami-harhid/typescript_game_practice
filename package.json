@@ -4,7 +4,8 @@
     "main": "index.js",
     "type": "module",
     "scripts": {
-        "dev": "vite --open",
+        "dev": "vite",
+        "devOpen": "vite --open",
         "build": "vite build --emptyOutDir --base=/typeScratchPractice/"
     },
     "author": "amami-harhid",
@@ -12,6 +13,7 @@
     "description": "",
     "devDependencies": {
         "@ampproject/remapping": "^2.3.0",
+        "@babel/core": "^7.29.7",
         "@babel/parser": "^7.27.1",
         "@types/node": "^25.9.1",
         "eslint": "^9.39.4",
