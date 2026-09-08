@@ -1,8 +1,25 @@
 import * as ts from 'typescript';
 import type { Plugin } from 'vite';
 import * as path from 'path';
+import { Project } from 'ts-morph';
 import { isTargetEventAssignment, hasSkipComment } from '../vite-plugin-ts-code-replacer/utils/plugins-helpers.ts';
 import { convertToAsyncGenerator, transformIfBody, transformLoopBody } from '../vite-plugin-ts-code-replacer/transformers/transformer.ts';
+
+// パフォーマンス向上のため、Projectインスタンスはファイル間で使い回す（シングルトン）
+let project: Project | null = null;
+
+function getOrInitProject(rootPath: string): Project {
+    if (project) return project;
+
+    project = new Project({
+        compilerOptions: { target: 99 /* ESNext */ },
+        skipAddingFilesFromTsConfig: true, // 高速化
+    });
+
+    return project;
+}
+
+
 export function vitePluginAutoAwait(): Plugin {
   let program: ts.Program | null = null;
   const targetVariableNames = new Set<string>();
@@ -129,8 +146,15 @@ export function vitePluginAutoAwait(): Plugin {
 		                const newThen = transformIfBody(_node.thenStatement, (n) => visit(n, true));
         		        const newElse = _node.elseStatement ? transformIfBody(_node.elseStatement, (n) => visit(n, true)) : undefined;
                 		return ts.factory.updateIfStatement(node, _node.expression, newThen, newElse);
-		            }
-
+					}
+		            return ts.visitEachChild(node, visit, context);
+        	    }
+		        return ts.visitNode(rootNode, visit) as ts.SourceFile;
+        	}
+        };
+		const awaitAddTransformer = (context: ts.TransformationContext) => {
+        	return (rootNode: ts.SourceFile) => {
+          		function visit(node: ts.Node, inLoop = false): ts.Node {
 					// 💡 呼び出し式の末尾の識別子（waitなど）に絞り込んで Symbol を取得
 					if (ts.isCallExpression(node)) {
 	    				let targetExpression = node.expression;
@@ -174,7 +198,7 @@ export function vitePluginAutoAwait(): Plugin {
 													// すでに await がついていなければ付与
 													if (node.parent && !ts.isAwaitExpression(node.parent)) {
 														console.log('await ++++')
-														return ts.factory.createAwaitExpression(ts.visitEachChild(node, visit, context));
+														return ts.factory.createAwaitExpression(ts.visitEachChild(node, visit, context)) ;
 													}
 												}
 											}else{
@@ -190,20 +214,53 @@ export function vitePluginAutoAwait(): Plugin {
 
 					}
 		            return ts.visitEachChild(node, visit, context);
-        	    }
-		        return ts.visitNode(rootNode, visit) as ts.SourceFile;
-        	}
-        };
+				}
+				return ts.visitNode(rootNode, visit) as ts.SourceFile;
+			}
+		};
+		const transpileResult = ts.transpileModule(code, {
+					compilerOptions: {
+						target: ts.ScriptTarget.Latest,
+						module: ts.ModuleKind.ESNext,
+						sourceMap: true,
+					},
+					fileName: id,
+					transformers: {
+						before: [
+							(context) => transformer(context) // typeCheckerを追加
+						]
+					}
+		});
+		const currentProject = getOrInitProject(process.cwd());
+		const _sourceFile = currentProject.createSourceFile(id, transpileResult.outputText, { overwrite: true }) as unknown as ts.SourceFile;
+		const awaitAddResult = ts.transform(_sourceFile, [awaitAddTransformer]);
 
-		const result = ts.transform(currentSourceFile, [transformer]);
-    	if (!isModified) return null; // 変更がなければ Vite の元の処理に任せる
-
+		if(transpileResult.sourceMapText){
 			const printer = ts.createPrinter();
-    		const transformedCode = printer.printNode(ts.EmitHint.SourceFile, result.transformed[0], currentSourceFile);
-    		return {
-        		code: transformedCode,
-        		map: null,
-    		};
+			const transformedCode = printer.printNode(ts.EmitHint.SourceFile, awaitAddResult.transformed[0], currentSourceFile);
+            const map1 = JSON.parse(transpileResult.sourceMapText);
+            	return {
+                        code: transformedCode,
+                        // MagicString側で生成した最新のソースマップを返す
+                        map: map1
+                    };
+
+        	}
+
+			// TODO 
+			// transpileModule に続けて、
+			// await 付与処理を行い、map は連結するようにしたい。
+
+			return null;
+		// const result = ts.transform(currentSourceFile, [transformer]);
+    	// if (!isModified) return null; // 変更がなければ Vite の元の処理に任せる
+
+		// 	const printer = ts.createPrinter();
+    	// 	const transformedCode = printer.printNode(ts.EmitHint.SourceFile, result.transformed[0], currentSourceFile);
+    	// 	return {
+        // 		code: transformedCode,
+        // 		map: null,
+    	// 	};
 		}
 	};
 }

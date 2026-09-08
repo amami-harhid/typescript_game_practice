@@ -12,4 +12,7 @@ sprite.Control.wait(10);
 
 sprite.Thread.func = function(this:Sprite){
     this.Control.wait(10);
+    for(;;){
+        this.Control.wait(10);
+    }
 }
