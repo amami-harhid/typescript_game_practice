@@ -5,7 +5,8 @@ import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import { glob } from 'glob'
 import checker from 'vite-plugin-checker';
-import { TsCodeReplacer } from './vitePlugins/vite-plugin-ts-code-replacer/index.ts';
+//import { TsCodeReplacer } from './vitePlugins/vite-plugin-ts-code-replacer/index.ts';
+import { vitePluginAutoAwait } from './vitePlugins/replacer/index.ts';
 
 // ルートとするディレクトリー
 //const root = resolve(import.meta.dirname, './src/')
@@ -37,7 +38,8 @@ export default defineConfig({
         devSourcemap: true
     },
     plugins: [
-        TsCodeReplacer(),
+        //TsCodeReplacer(),
+        vitePluginAutoAwait(),
         checker({
             typescript: true,
             // eslint: {

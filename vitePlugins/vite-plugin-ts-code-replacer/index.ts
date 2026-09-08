@@ -1,6 +1,7 @@
 import { createTransformer } from "./transformers/transformer.ts";
 import { transformObjectWrapping } from "./transformers/transformObjectWrapping.ts";
 import type { Plugin } from 'vite';
+import * as path from 'path';
 
 import remapping from '@ampproject/remapping'; 
 import ts from 'typescript';
@@ -25,22 +26,25 @@ export function TsCodeReplacer(): Plugin {
         name: 'vite-plugin-ts-code-replacer',
         enforce: 'pre', 
 
-        // Vite のビルド開始時（または開発サーバー起動時）に一度だけ Program を初期化
-        buildStart() {
-            const compilerOptions: ts.CompilerOptions = {
-                target: ts.ScriptTarget.ES2022,
-                module: ts.ModuleKind.ESNext,
-                // これらが抜けていると、自作クラスや別ファイルの型を解決できず lib.dom.d.ts 等に逃げてしまいます
-                moduleResolution: ts.ModuleResolutionKind.NodeNext, 
-                esModuleInterop: true,
-                strict: false // 置換目的であれば、厳密なチェックはオフで高速化
-            };
-            console.log('compilerOptions=', compilerOptions);
-            // プロジェクトのエントリーポイント、またはtsconfigからファイル一覧を取得するのが理想ですが、
-            // 簡易的には空の配列からスタートし、transform 時にルートファイルを差し替えます
-            program = ts.createProgram([], compilerOptions);
-        },
-
+        // 💡 プロジェクト起動時に tsconfig.json を読み込んで、型環境を完全に構築する
+            buildStart() {
+              const configPath = ts.findConfigFile(process.cwd(), ts.sys.fileExists, 'tsconfig.json');
+              if (!configPath) {
+                console.error("tsconfig.json が見つかりません。");
+                return;
+              }
+        
+              // tsconfig.json の中身をパース
+              const readResult = ts.readConfigFile(configPath, ts.sys.readFile);
+              const configParseResult = ts.parseJsonConfigFileContent(
+                readResult.config,
+                ts.sys,
+                path.dirname(configPath)
+              );
+        
+              // プロジェクト全体のファイルを最初からすべて含んだ Program を作成
+              program = ts.createProgram(configParseResult.fileNames, configParseResult.options);
+            },
         transform(code, id) {
             if (!id.endsWith('.ts') || id.includes('node_modules') || id.includes('docs') || id.includes('vitePlugins')) {
                 return null;
@@ -48,18 +52,25 @@ export function TsCodeReplacer(): Plugin {
             if (!id.includes('testV2')) {
                 return null;
             }
-            // 試行
-            //console.log('program=', program);
             if(program == null) return;
-            const compilerOptions = program!.getCompilerOptions();
-            const rootNames = Array.from(new Set([...program.getRootFileNames(), id]));
-            // 更新された Program を作成（これで型が正しく繋がります）
-            program = ts.createProgram(rootNames, compilerOptions, undefined, program);
-            const typeChecker: ts.TypeChecker = program.getTypeChecker();
-            const sourceFile = program.getSourceFile(id);
-            if (!sourceFile) return null;
 
+            // 開発中にファイルが書き換わった場合は、Program を最新状態に更新する（HMR対応）
+            const sourcePath = path.normalize(id).replace(/\\/g, '/');
+            const sourceFile = program.getSourceFile(sourcePath);
+// もし新しいファイルが追加されたり、既存ファイルが更新されていたら Program を再作成
+      if (!sourceFile) {
+        const compilerOptions = program.getCompilerOptions();
+        const rootNames = Array.from(new Set([...program.getRootFileNames(), sourcePath]));
+        program = ts.createProgram(rootNames, compilerOptions, undefined, program);
+      }      
+            const typeChecker = program.getTypeChecker();
+
+            if (!sourceFile) return null;
             try {
+                if( !program ) return null;
+                const result = program.emit(sourceFile, undefined, undefined, false, {
+                    before: [(context) => createTransformer(id, context, program)]
+                })
                 // 1. 先にループ構文のAST変換（yield挿入など）を行う
                 const transpileResult = ts.transpileModule(code, {
                     compilerOptions: {
@@ -70,13 +81,13 @@ export function TsCodeReplacer(): Plugin {
                     fileName: id,
                     transformers: {
                         before: [
-                            (context) => createTransformer(id, context, typeChecker) // typeCheckerを追加
+                            (context) => createTransformer(id, context, program) // typeCheckerを追加
                         ]
                     }
                 });
-
+                
                 // 2. TypeScriptが出力した「後」のコードに対して、オブジェクト置換を実行する 
-                const wrappedResult = transformObjectWrapping(transpileResult.outputText, id);
+                const wrappedResult = transformObjectWrapping(transpileResult.outputText, id, typeChecker);
                 // --- 2つのソースマップをマージする ---
                 // 【目的】ブラウザのデバッガがオリジナルのコード行にたどりつけるようにするため。
                 // TypeScriptのAST変換=>transformObjectWrappingの順番でコード変換をしているので
@@ -104,7 +115,7 @@ export function TsCodeReplacer(): Plugin {
                         code: wrappedResult.code,
                         // MagicString側で生成した最新のソースマップを返す
                         map: map1
-                };
+                    };
 
                 }else{
 

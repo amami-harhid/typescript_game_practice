@@ -42,7 +42,7 @@ export class Sprite extends SpriteBase{
     }
     draw() {
         const svgImage = this.costume.image;
-        if(svgImage.diagonalLineLength == 0 ){
+        if(svgImage == undefined || svgImage.diagonalLineLength == 0 ){
             console.log('diagonalLineLength　がゼロ');
             return;
         }

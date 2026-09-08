@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import { isTarget, createYieldStatement, hasSkipComment, isTargetEventAssignment, isAwaitTargetCallWithComment } from '../utils/plugins-helpers.ts';
+import { isTarget, createYieldStatement, hasSkipComment, isTargetEventAssignment, isAwaitTargetCallWithComment2 } from '../utils/plugins-helpers.ts';
 
 export interface PluginError extends Error {
     loc?: {
@@ -11,7 +11,7 @@ export interface PluginError extends Error {
 }
 
 // 繰り返し構文の「本体（Body）」を書き換えるメイン処理
-function transformLoopBody(
+export function transformLoopBody(
     node: ts.Statement, 
     visit: (n: ts.Node, inLoop?: boolean) => ts.Node, 
     id: string
@@ -104,7 +104,7 @@ function transformLoopBody(
     return ts.factory.createBlock(newStatements, true);
 }
 
-function transformIfBody(
+export function transformIfBody(
     node: ts.Statement, 
     visit: (n: ts.Node, inLoop?: boolean) => ts.Node
 ): ts.Statement {
@@ -125,7 +125,7 @@ function transformIfBody(
     }
 }
 
-function convertToAsyncGenerator(
+export function convertToAsyncGenerator(
     rightExpr: ts.FunctionExpression, 
     visit: (n: ts.Node, inLoop?: boolean) => ts.Node, 
     inLoop: boolean
@@ -152,7 +152,9 @@ function convertToAsyncGenerator(
     );
 }
 
-export const createTransformer = (id: string, context: ts.TransformationContext, typeChecker: ts.TypeChecker): ts.Transformer<ts.SourceFile> => {
+export const createTransformer = (id: string, context: ts.TransformationContext, program:ts.Program|null): ts.Transformer<ts.SourceFile> => {
+    
+    
     return (sf: ts.SourceFile) => {
     
         const targetVariableNames = new Set<string>();
@@ -169,14 +171,30 @@ export const createTransformer = (id: string, context: ts.TransformationContext,
         preScan(sf);
 
         function visit(node: ts.Node, inLoop = false): ts.Node {
+            const typeChecker = program?.getTypeChecker();
 
             // isAwaitTargetCallWithCommentの引数を typeChecker とした
-            if (isAwaitTargetCallWithComment(node, typeChecker) && node.parent && !ts.isAwaitExpression(node.parent)) {
-                // 先に子ノード（引数など）の内部変換を再帰処理したノードを作成
-                const visitedCall = ts.visitEachChild(node, (n) => visit(n, inLoop), context) as ts.CallExpression;
-                // それを await 演算子で包んで返す
-                return ts.factory.createAwaitExpression(visitedCall);
+            //if (isAwaitTargetCallWithComment2(node, typeChecker) && node.parent && !ts.isAwaitExpression(node.parent)) {
+            
+            if (ts.isCallExpression(node)) {
+                if (ts.isPropertyAccessExpression(node.expression)) {
+                    if( node.expression.name.getText() == 'wait' ) {
+                        const leftNode = node.expression.expression; // "sprite.Control" の部分
+                        const leftType = typeChecker?.getTypeAtLocation(leftNode);
+                        if(leftType)
+                            console.log(`[型チェック] ${leftNode.getText()} の型:`, typeChecker?.typeToString(leftType));
+                        
+                    }
+                }
             }
+
+
+            // if (isAwaitTargetCallWithComment2(node, typeChecker) ) {
+            //     // 先に子ノード（引数など）の内部変換を再帰処理したノードを作成
+            //     const visitedCall = ts.visitEachChild(node, (n) => visit(n, inLoop), context) as ts.CallExpression;
+            //     // それを await 演算子で包んで返す
+            //     return ts.factory.createAwaitExpression(visitedCall);
+            // }
 
             // 変数宣言文の検知と変換
             if (ts.isVariableDeclaration(node) && node.initializer && ts.isFunctionExpression(node.initializer)) {
