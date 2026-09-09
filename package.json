@@ -15,6 +15,8 @@
         "@ampproject/remapping": "^2.3.0",
         "@babel/core": "^7.29.7",
         "@babel/parser": "^7.27.1",
+        "@babel/plugin-proposal-decorators": "^7.29.7",
+        "@rolldown/plugin-babel": "^0.2.4",
         "@types/node": "^25.9.1",
         "eslint": "^9.39.4",
         "glob": "^10.5.0",

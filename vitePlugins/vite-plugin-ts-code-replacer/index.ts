@@ -68,9 +68,6 @@ export function TsCodeReplacer(): Plugin {
             if (!sourceFile) return null;
             try {
                 if( !program ) return null;
-                const result = program.emit(sourceFile, undefined, undefined, false, {
-                    before: [(context) => createTransformer(id, context, program)]
-                })
                 // 1. 先にループ構文のAST変換（yield挿入など）を行う
                 const transpileResult = ts.transpileModule(code, {
                     compilerOptions: {

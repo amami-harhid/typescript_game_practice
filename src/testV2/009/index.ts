@@ -5,14 +5,17 @@
  */
 
 import { Sprite } from '../008/sprite';
-
+import { Engine } from '../008/engine';
+import Cat from '../../../assets/cat.svg';
 const sprite = new Sprite();
-
+sprite.addImage(Cat);
 sprite.Control.wait(10);
 
 sprite.Thread.func = function(this:Sprite){
     this.Control.wait(10);
     for(;;){
-        this.Control.wait(10);
+        this.degree += 25;
+        this.Control.wait(0.1);
     }
 }
+Engine.run();

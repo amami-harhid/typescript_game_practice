@@ -7,6 +7,7 @@ import { glob } from 'glob'
 import checker from 'vite-plugin-checker';
 //import { TsCodeReplacer } from './vitePlugins/vite-plugin-ts-code-replacer/index.ts';
 import { vitePluginAutoAwait } from './vitePlugins/replacer/index.ts';
+import babel from "@rolldown/plugin-babel"
 
 // ルートとするディレクトリー
 //const root = resolve(import.meta.dirname, './src/')
@@ -25,9 +26,9 @@ for(const target of targetDir){
 // ビルド結果を出力する先
 const outDir = resolve(import.meta.dirname, 'docs');
 
-export default defineConfig({
+export default defineConfig({    
     build: {
-        target: "esnext",
+        target: "es2022",
         outDir, // ビルド結果を格納する先
         rollupOptions: {
             input: rollupOpsionsInput,
@@ -38,6 +39,12 @@ export default defineConfig({
         devSourcemap: true
     },
     plugins: [
+        babel({
+            presets: [{
+                preset: ()=> ({plugins: [["@babel/plugin-proposal-decorators", { version: "2023-11" }]]}),
+                rolldown: { filter: { code: "@" } },
+            }]
+        }),
         //TsCodeReplacer(),
         vitePluginAutoAwait(),
         checker({
