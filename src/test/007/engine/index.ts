@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { SpriteBase } from "../sprite/base";
 import { Stage } from "../stage";
 
@@ -97,7 +98,7 @@ export class Engine {
             threads.push({active:true, g: g});
         }
         const _engine = Engine.getInstance();
-        let interval = setInterval( async ()=>{
+        const interval = setInterval( async ()=>{
             for(const thread of threads){
                 if( thread.active === true){
                     thread.g.next().then((rtn)=>{

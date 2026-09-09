@@ -28,7 +28,7 @@ const outDir = resolve(import.meta.dirname, 'docs');
 
 export default defineConfig({    
     build: {
-        target: "es2022",
+        target: "esnext",
         outDir, // ビルド結果を格納する先
         rollupOptions: {
             input: rollupOpsionsInput,
@@ -39,6 +39,7 @@ export default defineConfig({
         devSourcemap: true
     },
     plugins: [
+        /* Decorator用 */
         babel({
             presets: [{
                 preset: ()=> ({plugins: [["@babel/plugin-proposal-decorators", { version: "2023-11" }]]}),
@@ -46,7 +47,7 @@ export default defineConfig({
             }]
         }),
         //TsCodeReplacer(),
-        vitePluginAutoAwait(),
+        //vitePluginAutoAwait(),
         checker({
             typescript: true,
             // eslint: {
@@ -55,4 +56,16 @@ export default defineConfig({
         })
     ],
     root: resolve(import.meta.dirname, './src'),
+    server: {
+        headers: {
+            'Cross-Origin-Opener-Policy': 'same-origin',
+            'Cross-Origin-Embedder-Policy': 'require-corp',
+        },
+    },
+    preview: {
+        headers: {
+            'Cross-Origin-Opener-Policy': 'same-origin',
+            'Cross-Origin-Embedder-Policy': 'require-corp',
+        },    
+    },
 })

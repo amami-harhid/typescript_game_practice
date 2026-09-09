@@ -9,7 +9,7 @@ import Cat2 from '../../../assets/cat2.svg';
 
 import { Sprite } from './sprite';
 import { Engine } from './engine';
-import * as Control from '../../lib/controls';
+//import * as Control from '../../lib/controls';
 
 const sprite = new Sprite();
 
@@ -53,11 +53,15 @@ const loop03 = async function*(this:Sprite) {
         yield;
     }
 }
+const sab = new SharedArrayBuffer(4);
+const int32 = new Int32Array(sab);
+
 /** スプライトのスレッド( 位置X を変更 ) */
 const loop04 = async function*(this:Sprite) {
     for(;;){
         this.costume.next();
-        await Control.controlWait(0.1);
+        //await Control.controlWait(0.1);
+        Atomics.waitAsync(int32, 0, 0, 1000);
         yield;
     }
 }

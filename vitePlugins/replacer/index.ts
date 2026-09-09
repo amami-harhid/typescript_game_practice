@@ -295,3 +295,14 @@ export function vitePluginAutoAwait(): Plugin {
 		}
 	}
 }
+
+// TODO
+// 
+// サーバー起動したときに１回だけ
+// JSDoc内に特定マークがあるメソッドを事前に検索してXMLに保存
+// メソッドの検索は、特定フォルダーにあるもののみとする
+// メソッドDecoratorを付けておき、Babelで検索する( 特定フォルダーの中のみ )
+// 
+// Xmlには、class名.method名 で格納する
+// Spriteクラス、Stageクラス側のプロパティには、Method-Decoratorがついているメソッドを含むプロパティに 個別のDecorator(@A)をつける
+// 
