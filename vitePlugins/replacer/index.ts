@@ -5,7 +5,7 @@ import { Project, VariableDeclaration } from 'ts-morph';
 import { isTargetEventAssignment, hasSkipComment } from '../vite-plugin-ts-code-replacer/utils/plugins-helpers.ts';
 import { convertToAsyncGenerator, transformIfBody, transformLoopBody } from '../vite-plugin-ts-code-replacer/transformers/transformer.ts';
 
-import { isAwaitAddTransformerVist } from './helper.ts';
+import { isAwaitAddTransformerVist, awaitTargets } from './helper.ts';
 
 // パフォーマンス向上のため、Projectインスタンスはファイル間で使い回す（シングルトン）
 let project: Project | null = null;
@@ -28,9 +28,15 @@ export function vitePluginAutoAwait(): Plugin {
 	const inMemoryCache = new Map<string, string>();
 	let compilerOptions: ts.CompilerOptions = {};
 	let configFileNames: string[] = [];
+	const awaitTargetList : string[] = [];
 	return {
 		name: 'vite-plugin-auto-await',
-    	enforce: 'pre', 
+    	enforce: 'pre',
+		async configResolved() {
+			const _awaitTargetList = await awaitTargets();
+			awaitTargetList.push( ..._awaitTargetList);
+			console.log(awaitTargetList);
+		},
     	// 💡 プロジェクト起動時に tsconfig.json を読み込んで、型環境を完全に構築する
     	buildStart() {
       		const configPath = ts.findConfigFile(process.cwd(), ts.sys.fileExists, 'tsconfig.json');
@@ -118,7 +124,7 @@ export function vitePluginAutoAwait(): Plugin {
 						// 💡 呼び出し式の末尾の識別子（waitなど）に絞り込んで Symbol を取得
 						//console.log('awaitAddTransformer[2]')
 						if (ts.isCallExpression(node)) {
-							const needsAwait: boolean = isAwaitAddTransformerVist(node, typeChecker);
+							const needsAwait: boolean = isAwaitAddTransformerVist(node, typeChecker, awaitTargetList);
 							if( needsAwait ) {
 								const awaitNode = ts.factory.createAwaitExpression(ts.visitEachChild(node, visit, context)) ;
 								// 置換前のオリジナルノード（node）の開始・終了位置を、新ノードに100%引き継ぎます

@@ -9,12 +9,12 @@ import { Engine } from '../008/engine';
 import Cat from '../../../assets/cat.svg';
 const sprite = new Sprite();
 sprite.addImage(Cat);
-sprite.Control.wait(10);
+sprite.Control.wait(0.2);
 
 sprite.Thread.func = function(this:Sprite){
-    this.Control.wait(10);
+    this.Control.wait(0.2);
     for(;;){
-        this.degree += 25;
+        this.degree += 5;
         this.Control.wait(0.1);
     }
 }

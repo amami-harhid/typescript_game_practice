@@ -19,6 +19,7 @@
         "@rolldown/plugin-babel": "^0.2.4",
         "@types/node": "^25.9.1",
         "eslint": "^9.39.4",
+        "fast-xml-parser": "^5.11.1",
         "glob": "^10.5.0",
         "magic-string": "^1.1.1",
         "optionator": "^0.9.4",

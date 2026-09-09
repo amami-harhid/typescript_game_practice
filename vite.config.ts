@@ -47,7 +47,7 @@ export default defineConfig({
             }]
         }),
         //TsCodeReplacer(),
-        //vitePluginAutoAwait(),
+        vitePluginAutoAwait(),
         checker({
             typescript: true,
             // eslint: {
