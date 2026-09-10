@@ -5,7 +5,7 @@ import { Project, VariableDeclaration } from 'ts-morph';
 import { isTargetEventAssignment, hasSkipComment } from '../vite-plugin-ts-code-replacer/utils/plugins-helpers.ts';
 import { convertToAsyncGenerator, transformIfBody, transformLoopBody } from '../vite-plugin-ts-code-replacer/transformers/transformer.ts';
 
-import { isAwaitAddTransformerVist, getAwaitTargets } from './helper.ts';
+import { isAwaitAddTransformerVist, getAwaitTargets, changeAsyncFunction, directAsyncFunction, loopChange } from './helper.ts';
 
 export function vitePluginAutoAwait(): Plugin {
 	let program: ts.Program | null = null;
@@ -125,7 +125,8 @@ export function vitePluginAutoAwait(): Plugin {
 						if (ts.isCallExpression(node)) {
 							const needsAwait: boolean = isAwaitAddTransformerVist(node, typeChecker, awaitTargetList);
 							if( needsAwait ) {
-								const awaitNode = ts.factory.createAwaitExpression(ts.visitEachChild(node, visit, context)) ;
+								const awaitNode = ts.factory.createAwaitExpression( node ) ;
+								//const awaitNode = ts.factory.createAwaitExpression(ts.visitEachChild(node, visit, context)) ;
 								// 置換前のオリジナルノード（node）の開始・終了位置を、新ノードに100%引き継ぎます
 								ts.setTextRange(awaitNode, node);
 								isModified = true;
@@ -135,36 +136,48 @@ export function vitePluginAutoAwait(): Plugin {
 						// 変数定義されたメソッドを async function*() 化する
 						if (ts.isVariableDeclaration(node) && node.initializer && ts.isFunctionExpression(node.initializer)) {
 							if (ts.isIdentifier(node.name) && targetVariableNames.has(node.name.text)) {
-    	    	            	const updatedFunction = convertToAsyncGenerator(node.initializer, visit, inLoop);
-        	    	        	const variableNode = ts.factory.updateVariableDeclaration(
-            	    	    		node,
-                		    		node.name,
-                	    			node.exclamationToken,
-                    				node.type,
-                    				updatedFunction
-	                			);
-								ts.setTextRange(variableNode, node);
-								isModified = true;
-								return variableNode;
+								const [change, variableNode] = changeAsyncFunction(node, visit, inLoop);
+    	    	            	if(change){
+									isModified = true;
+									ts.setTextRange(variableNode, node);
+									return variableNode;
+								}
+								// const updatedFunction = convertToAsyncGenerator(node.initializer, visit, inLoop);
+        	    	        	// const variableNode = ts.factory.updateVariableDeclaration(
+            	    	    	// 	node,
+                		    	// 	node.name,
+                	    		// 	node.exclamationToken,
+                    			// 	node.type,
+                    			// 	updatedFunction
+	                			// );
+								// ts.setTextRange(variableNode, node);
+								// isModified = true;
+								// return variableNode;
     	            		}
         	      		}
 						// 直接のイベント代入の検知と変換
             			if (isTargetEventAssignment(node)) {
-                			const binaryExpr = node as unknown as  ts.BinaryExpression;
-                			const rightExpr = binaryExpr.right;
-
-			                if (ts.isFunctionExpression(rightExpr)) {
-    	    		            const updatedFunction = convertToAsyncGenerator(rightExpr, visit, inLoop);
-        	        		    const updateBinaryExpression = ts.factory.updateBinaryExpression(
-            	            		binaryExpr,
-        			                binaryExpr.left,
-                			        binaryExpr.operatorToken,
-                        			updatedFunction
-                    			);
+							const [change, updateBinaryExpression] = directAsyncFunction(node, visit, inLoop);
+							if(change){
 								ts.setTextRange(updateBinaryExpression, node);
 								isModified = true;
 								return updateBinaryExpression;
-	                		}
+							}
+                			// const binaryExpr = node as unknown as  ts.BinaryExpression;
+                			// const rightExpr = binaryExpr.right;
+
+			                // if (ts.isFunctionExpression(rightExpr)) {
+    	    		        //     const updatedFunction = convertToAsyncGenerator(rightExpr, visit, inLoop);
+        	        		//     const updateBinaryExpression = ts.factory.updateBinaryExpression(
+            	            // 		binaryExpr,
+        			        //         binaryExpr.left,
+                			//         binaryExpr.operatorToken,
+                        	// 		updatedFunction
+                    		// 	);
+							// 	ts.setTextRange(updateBinaryExpression, node);
+							// 	isModified = true;
+							// 	return updateBinaryExpression;
+	                		// }
     	        		}
 						// 繰り返し構文の検知と書き換え
 	            		if (
@@ -183,50 +196,57 @@ export function vitePluginAutoAwait(): Plugin {
 								console.log('fileName=',node.getSourceFile().fileName);
 								return ts.visitEachChild(node, (n) => visit(n, false), context);
 							}
-
-			                if (ts.isForStatement(node)) {
-        			            const _node = node as ts.ForStatement
-                			    const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
-                    			const forStatement = ts.factory.updateForStatement(node, _node.initializer, _node.condition, _node.incrementor, updatedBody);
-								ts.setTextRange(forStatement, node);
+							const [change, loopNewStatement] = loopChange(id, node, visit, inLoop);
+			                if(change) {
+								ts.setTextRange(loopNewStatement, node);
 								isModified = true;
-								return forStatement;
-							}
-	                		if (ts.isForInStatement(node)) {
-    	                		const _node = node as ts.ForInStatement
-        	            		const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
-            	        		const forInStatemnet = ts.factory.updateForInStatement(node, _node.initializer, _node.expression, updatedBody);
-								ts.setTextRange(forInStatemnet, node);
-								isModified = true;
-								return forInStatemnet;
-							}
-                			if (ts.isForOfStatement(node)) {
-                    			const _node = node as ts.ForOfStatement;
-                    			const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
-                    			const forOfStatement = ts.factory.updateForOfStatement(node, _node.awaitModifier, _node.initializer, _node.expression, updatedBody);
-								ts.setTextRange(forOfStatement, node);
-								isModified = true;
-								return forOfStatement;
-							}
-    	            		if (ts.isWhileStatement(node)) {
-        	            		const _node = node as ts.WhileStatement;
-            	        		const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
-            			        const whileStatement = ts.factory.updateWhileStatement(node, _node.expression, updatedBody);
-								ts.setTextRange(whileStatement, node);
-								isModified = true;
-								return whileStatement;
-							}
-    		            	if (ts.isDoStatement(node)) {
-            		        	const _node = node as ts.DoStatement;
-    	                		const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
-    			                const doStatement = ts.factory.updateDoStatement(node, updatedBody, _node.expression);
-								ts.setTextRange(doStatement, node);
-								isModified = true;
-								return doStatement;
-							}
+								return loopNewStatement;
+							}							
+							// if (ts.isForStatement(node)) {
+        			        //     const _node = node as ts.ForStatement
+                			//     const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
+                    		// 	const forStatement = ts.factory.updateForStatement(node, _node.initializer, _node.condition, _node.incrementor, updatedBody);
+							// 	ts.setTextRange(forStatement, node);
+							// 	isModified = true;
+							// 	return forStatement;
+							// }
+	                		// if (ts.isForInStatement(node)) {
+    	                	// 	const _node = node as ts.ForInStatement
+        	            	// 	const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
+            	        	// 	const forInStatemnet = ts.factory.updateForInStatement(node, _node.initializer, _node.expression, updatedBody);
+							// 	ts.setTextRange(forInStatemnet, node);
+							// 	isModified = true;
+							// 	return forInStatemnet;
+							// }
+                			// if (ts.isForOfStatement(node)) {
+                    		// 	const _node = node as ts.ForOfStatement;
+                    		// 	const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
+                    		// 	const forOfStatement = ts.factory.updateForOfStatement(node, _node.awaitModifier, _node.initializer, _node.expression, updatedBody);
+							// 	ts.setTextRange(forOfStatement, node);
+							// 	isModified = true;
+							// 	return forOfStatement;
+							// }
+    	            		// if (ts.isWhileStatement(node)) {
+        	            	// 	const _node = node as ts.WhileStatement;
+            	        	// 	const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
+            			    //     const whileStatement = ts.factory.updateWhileStatement(node, _node.expression, updatedBody);
+							// 	ts.setTextRange(whileStatement, node);
+							// 	isModified = true;
+							// 	return whileStatement;
+							// }
+    		            	// if (ts.isDoStatement(node)) {
+            		        // 	const _node = node as ts.DoStatement;
+    	                	// 	const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
+    			            //     const doStatement = ts.factory.updateDoStatement(node, updatedBody, _node.expression);
+							// 	ts.setTextRange(doStatement, node);
+							// 	isModified = true;
+							// 	return doStatement;
+							// }
             			}
 
 			            // ループ内の if 文の検知
+						// ループの中にある if文(thenブロック、elseブロック)にて
+						// continue, break文があれば、yieldを付けてブロックを更新する
     	    		    if (inLoop && ts.isIfStatement(node)) {
         	        		const _node = node as ts.IfStatement;
 		    	            const newThen = transformIfBody(_node.thenStatement, (n) => visit(n, true));

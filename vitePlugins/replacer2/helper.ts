@@ -9,13 +9,15 @@ export const getAwaitTargets = (): string[] => {
     return list;
 }
 
-export const isAwaitAddTransformerVist = function(node: ts.Node, typeChecker: ts.TypeChecker, targetList:string[]): boolean {
+export const isAwaitAddTransformerVist = function(node: ts.Node, typeChecker: ts.TypeChecker|null, targetList:string[]): boolean {
+    if(!typeChecker) return false;
     const _node = node as ts.CallExpression;
     let targetExpression = _node.expression;
     if (ts.isPropertyAccessExpression(_node.expression)) {
         const _name = _node.expression.name.getText();
         if( targetList.includes( _name )) {
             let symbol = typeChecker.getSymbolAtLocation(targetExpression);	
+            console.log('symbol=', symbol);
             if (symbol) {
                 // エイリアス（インポート）の解決
                 let declarationSymbol = symbol;

@@ -13,11 +13,10 @@ sprite.position.x = window.innerWidth/2;
 sprite.position.y = window.innerHeight/2;
 sprite.Control.wait(0.1);
 
-sprite.Thread.func = function(this:Sprite){
-    //this.Control.wait(0.2);
-    for(;;){
-        this.degree += 5;
-        this.Control.wait(0.03);
-    }
-}
+// sprite.Thread.func = function(this:Sprite){
+//     for(;;){
+//         this.degree += 5;
+//         this.Control.wait(0.03);
+//     }
+// }
 Engine.run();

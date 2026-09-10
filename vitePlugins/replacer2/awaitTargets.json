@@ -1,0 +1,6 @@
+{
+  "targets": [{    
+      "name": "wait",
+      "fullName": "Control.wait"
+  }]
+}
