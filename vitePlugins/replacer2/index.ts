@@ -1,6 +1,7 @@
 import * as ts from 'typescript';
 import type { Plugin } from 'vite';
 import * as path from 'path';
+import MagicString from "magic-string";
 import { Project, VariableDeclaration } from 'ts-morph';
 import { isTargetEventAssignment, hasSkipComment } from '../vite-plugin-ts-code-replacer/utils/plugins-helpers.ts';
 import { convertToAsyncGenerator, transformIfBody, transformLoopBody } from '../vite-plugin-ts-code-replacer/transformers/transformer.ts';
@@ -66,6 +67,8 @@ export function vitePluginAutoAwait(): Plugin {
     		if (!id.endsWith('.ts') && !id.endsWith('.tsx') || id.includes('node_modules')) return null;
     		if (!id.includes('testV2')) return null; // testV2 のときだけ実行する
     		if (!program) return null;
+			const printer = ts.createPrinter({ removeComments: false });
+			const magicSource = new MagicString(code);
 			//const typeChecker = program.getTypeChecker();
 
 			// 2. 現在ファイルの内容で SourceFile オブジェクトをパース
@@ -115,58 +118,43 @@ export function vitePluginAutoAwait(): Plugin {
 	      	let isModified = false;
 
 			const visitor = (node: ts.Node): ts.Node => {
-						if (ts.isCallExpression(node)) {
-							const needsAwait: boolean = isAwaitAddTransformerVist(node, typeChecker, awaitTargetList);
-							if( needsAwait ) {
-								const awaitNode = ts.factory.createAwaitExpression( node ) ;
+				if (ts.isCallExpression(node)) {
+					const needsAwait: boolean = isAwaitAddTransformerVist(node, typeChecker, awaitTargetList);
+					if( needsAwait ) {
+						const awaitNode = ts.factory.createAwaitExpression( node ) ;
 								//const awaitNode = ts.factory.createAwaitExpression(ts.visitEachChild(node, visit, context)) ;
 								// 置換前のオリジナルノード（node）の開始・終了位置を、新ノードに100%引き継ぎます
-								ts.setTextRange(awaitNode, node);
-								isModified = true;
-								return awaitNode;
-							}
-						}
-			            return ts.visitEachChild(node, visitor, context);
+						ts.setTextRange(awaitNode, node);
+						isModified = true;
+						return awaitNode;
+					}
+				}
+	            return ts.visitEachChild(node, visitor, context);
 
 			}
-			const mainTransformer = (context: ts.TransformationContext) => {
-				//console.log('awaitAddTransformer[1]')
-    	    	return (rootNode: ts.SourceFile) => {
-
-        	  		function visit(node: ts.Node, inLoop = false): ts.Node {
-						// 💡 呼び出し式の末尾の識別子（waitなど）に絞り込んで Symbol を取得
-						//console.log('awaitAddTransformer[2]')
-						if (ts.isCallExpression(node)) {
-							const needsAwait: boolean = isAwaitAddTransformerVist(node, typeChecker, awaitTargetList);
-							if( needsAwait ) {
-								const awaitNode = ts.factory.createAwaitExpression( node ) ;
-								//const awaitNode = ts.factory.createAwaitExpression(ts.visitEachChild(node, visit, context)) ;
-								// 置換前のオリジナルノード（node）の開始・終了位置を、新ノードに100%引き継ぎます
-								ts.setTextRange(awaitNode, node);
-								isModified = true;
-								return awaitNode;
-							}
-						}
-			            return ts.visitEachChild(node, visit, context);
-					}
-					return ts.visitNode(rootNode, visit) as ts.SourceFile;
-				}
-			};
 			//console.log('==========[001]============')
 
 			// 擬似的なトランスフォームコンテキストの作成、または ts.transform の実行
-      		const context = {
+      		const context : ts.TransformationContext = {
         		getCompilerOptions: () => program!.getCompilerOptions(),
-        hoistFunctionDeclaration: () => {},
-        hoistVariableDeclaration: () => {},
-        readEmitHelpers: () => undefined,
-        requestEmitHelper: () => {},
-        resumeLexicalEnvironment: () => {},
-        startLexicalEnvironment: () => {},
+		        hoistFunctionDeclaration: () => {},
+        		hoistVariableDeclaration: () => {},
+    		    readEmitHelpers: () => undefined,
+    		    requestEmitHelper: () => {},
+    		    resumeLexicalEnvironment: () => {},
+        		startLexicalEnvironment: () => {},
         		endLexicalEnvironment: () => undefined,
+				enableSubstitution: ()=> {}, 
+				isSubstitutionEnabled: (node:ts.Node): any => {}, 
+				onSubstituteNode: (): any=>{}, 
+				enableEmitNotification: (): any=>{},
+				isEmitNotificationEnabled: ():any=>{}, 
+				onEmitNode: ()=>{}, 
+				factory:  ,
+				suspendLexicalEnvironment: ()=>{}
       		};
 			const transformedSource = ts.visitNode(sourceFile, visitor) as ts.SourceFile;
-			const printer = ts.createPrinter({ removeComments: false });
+			//const printer = ts.createPrinter({ removeComments: false });
 			const outputText = printer.printFile(transformedSource);
 
       		return {
