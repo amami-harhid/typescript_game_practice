@@ -5,22 +5,7 @@ import { Project, VariableDeclaration } from 'ts-morph';
 import { isTargetEventAssignment, hasSkipComment } from '../vite-plugin-ts-code-replacer/utils/plugins-helpers.ts';
 import { convertToAsyncGenerator, transformIfBody, transformLoopBody } from '../vite-plugin-ts-code-replacer/transformers/transformer.ts';
 
-import { isAwaitAddTransformerVist, awaitTargets } from './helper.ts';
-
-// パフォーマンス向上のため、Projectインスタンスはファイル間で使い回す（シングルトン）
-let project: Project | null = null;
-
-function getOrInitProject(rootPath: string): Project {
-    if (project) return project;
-
-    project = new Project({
-        compilerOptions: { target: 99 /* ESNext */ },
-        skipAddingFilesFromTsConfig: true, // 高速化
-    });
-
-    return project;
-}
-
+import { isAwaitAddTransformerVist, getAwaitTargets } from './helper.ts';
 
 export function vitePluginAutoAwait(): Plugin {
 	let program: ts.Program | null = null;
@@ -33,7 +18,7 @@ export function vitePluginAutoAwait(): Plugin {
 		name: 'vite-plugin-auto-await',
     	enforce: 'pre',
 		async configResolved() {
-			const _awaitTargetList = await awaitTargets();
+			const _awaitTargetList = getAwaitTargets();
 			awaitTargetList.push( ..._awaitTargetList);
 			console.log(awaitTargetList);
 		},
@@ -59,9 +44,10 @@ export function vitePluginAutoAwait(): Plugin {
         		sourceMap: true,       // 🚨 これにより、emit時に元の位置に紐づくマップが自動生成されます
         		inlineSources: true,   // 元のコードをマップに含める
 				//noEmit : false,
-				//emitDeclarationOnly: false,
+				//emitDeclarationOnly: true,
+				//experimentalDecorators: true,
 			}
-			compilerOptions.experimentalDecorators = false;
+			//compilerOptions.experimentalDecorators = false;
 			configFileNames = configParseResult.fileNames;
 
 	      	// プロジェクト全体のファイルを最初からすべて含んだ Program を作成
@@ -120,6 +106,19 @@ export function vitePluginAutoAwait(): Plugin {
 			const mainTransformer = (context: ts.TransformationContext) => {
 				//console.log('awaitAddTransformer[1]')
     	    	return (rootNode: ts.SourceFile) => {
+
+					function preScan(node: ts.Node): void {
+						targetVariableNames.clear();
+						if (isTargetEventAssignment(node)) {
+							const binaryExpr = node as ts.BinaryExpression;
+							if (ts.isIdentifier(binaryExpr.right)) {
+								targetVariableNames.add(binaryExpr.right.text);
+							}
+						}
+						ts.forEachChild(node, preScan);
+					}
+					preScan(rootNode);
+
         	  		function visit(node: ts.Node, inLoop = false): ts.Node {
 						// 💡 呼び出し式の末尾の識別子（waitなど）に絞り込んで Symbol を取得
 						//console.log('awaitAddTransformer[2]')
@@ -133,8 +132,9 @@ export function vitePluginAutoAwait(): Plugin {
 								return awaitNode;
 							}
 						}
+						// 変数定義されたメソッドを async function*() 化する
 						if (ts.isVariableDeclaration(node) && node.initializer && ts.isFunctionExpression(node.initializer)) {
-	    	            	if (ts.isIdentifier(node.name) && targetVariableNames.has(node.name.text)) {
+							if (ts.isIdentifier(node.name) && targetVariableNames.has(node.name.text)) {
     	    	            	const updatedFunction = convertToAsyncGenerator(node.initializer, visit, inLoop);
         	    	        	const variableNode = ts.factory.updateVariableDeclaration(
             	    	    		node,
@@ -177,6 +177,12 @@ export function vitePluginAutoAwait(): Plugin {
     	            		if (hasSkipComment(node, rootNode)) {
         	            		return ts.visitEachChild(node, (n) => visit(n, false), context);
             	    		}
+							const fileName = node.getSourceFile().fileName;
+							console.log('fileName[3]=', fileName);
+							if(fileName.includes('/lib/')){
+								console.log('fileName=',node.getSourceFile().fileName);
+								return ts.visitEachChild(node, (n) => visit(n, false), context);
+							}
 
 			                if (ts.isForStatement(node)) {
         			            const _node = node as ts.ForStatement
@@ -302,13 +308,15 @@ export function vitePluginAutoAwait(): Plugin {
 	}
 }
 
-// TODO
+// FEATURES
 // 
-// サーバー起動したときに１回だけ
-// JSDoc内に特定マークがあるメソッドを事前に検索してXMLに保存
-// メソッドの検索は、特定フォルダーにあるもののみとする
-// メソッドDecoratorを付けておき、Babelで検索する( 特定フォルダーの中のみ )
-// 
-// Xmlには、class名.method名 で格納する
-// Spriteクラス、Stageクラス側のプロパティには、Method-Decoratorがついているメソッドを含むプロパティに 個別のDecorator(@A)をつける
-// 
+// (1) replacer/awaitTargets.json
+//  awaitをつけたい メソッド名を入れておく
+// (2) メソッドJSDOCにマーク
+//   JSDOCに @needsAwait　があるメソッドを必要条件とする
+// (3) async function* にする対象
+//   const loop01 = function() {  };
+//   xxx.Thread.func = loop01;
+//   スコープの考慮をしていない簡易解析版なので、使用時には注意すること
+//   
+ 

@@ -7,8 +7,8 @@
 import Cat from '../../../assets/cat.svg';
 import Cat2 from '../../../assets/cat2.svg';
 
-import { Sprite } from './sprite';
-import { Engine } from './engine';
+import { Sprite } from './lib/sprite';
+import { Engine } from './lib/engine';
 
 const sprite = new Sprite();
 

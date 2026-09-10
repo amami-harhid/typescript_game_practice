@@ -1,17 +1,20 @@
 import * as ts from 'typescript';
-import { promises as fs } from 'fs';
-import { XMLParser } from 'fast-xml-parser';
+
+import awaitTargetsJson from './awaitTargets.json' with { type: 'json' };
+export const getAwaitTargets = (): string[] => {
+    const list:string[] = [];
+    for(const item of awaitTargetsJson.targets) {
+        list.push( item.name );
+    }
+    return list;
+}
+
 export const isAwaitAddTransformerVist = function(node: ts.Node, typeChecker: ts.TypeChecker, targetList:string[]): boolean {
     const _node = node as ts.CallExpression;
     let targetExpression = _node.expression;
     if (ts.isPropertyAccessExpression(_node.expression)) {
         const _name = _node.expression.name.getText();
         if( targetList.includes( _name )) {
-            // const leftNode = _node.expression.expression; // "sprite.Control" の部分
-            // const leftType = typeChecker.getTypeAtLocation(leftNode);
-            // if(leftType)
-            //     console.log(`[型チェック] ${leftNode.getText()} の型:`, typeChecker.typeToString(leftType));
-
             let symbol = typeChecker.getSymbolAtLocation(targetExpression);	
             if (symbol) {
                 // エイリアス（インポート）の解決
@@ -52,38 +55,4 @@ export const isAwaitAddTransformerVist = function(node: ts.Node, typeChecker: ts
         }
     }
     return false;
-}
-interface TargetItem {
-    name: string,
-    fullName: string,
-}
-interface AwaitTargets {
-  targets: {
-    item: TargetItem[],
-  },
-}
-
-export const awaitTargets = async function() {
-    const filePath = './vitePlugins/replacer/awaitTargets.xml';
-    const list : string[] = []
-    return new Promise<string[]>(async resolve=>{
-
-        const xmlData = await fs.readFile(filePath, 'utf-8');
-
-        const parser = new XMLParser({
-            ignoreAttributes: true, // Set to false if you want to keep XML attributes
-        });
-        const result = parser.parse(xmlData) as AwaitTargets;
-        console.log('Successfully parsed XML:', JSON.stringify(result, null, 2));
-        console.log(result);
-        if( Array.isArray(result.targets.item)) {
-            for(const t of result.targets.item){
-                list.push(t.name);
-            }
-        }else{
-            list.push(result.targets.item['name']);
-        }
-        resolve(list);
-    });
-
 }
