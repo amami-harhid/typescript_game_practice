@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<targets>
+  <item>
+    <name>wait</name>
+    <fullName>Control.wait</fullName>
+  </item>
+</targets>
