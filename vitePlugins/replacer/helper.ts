@@ -1,9 +1,36 @@
 import * as ts from 'typescript';
-import { JSDocTagInfo, Project, PropertyAccessExpression, Symbol, SyntaxKind } from 'ts-morph';
-import MagicString from 'magic-string';
 import awaitTargetsJson from './awaitTargets.json' with { type: 'json' };
-import path from 'path';
+import { LOOP_YIELD_SKIP_COMMENT } from './loopYieldSkipMark.ts';
+import { minimatch } from 'minimatch';
+import yieldExcludesJson from './yieldExcludes.json' with { type: 'json' };
 
+/**
+ * yield付与の非対象のファイルパスかを判定する
+ * @param {string} filePath - チェック対象のファイルパス
+ * @returns {boolean} 非対象であれば true、そうでなければ false
+ */
+export function isYieldExcluded(filePath: string): boolean {
+    // 「～～/lib/...」のように前方に任意の文字を許容したい場合は、
+    // パターンの先頭に `**` があるとします。
+    const isEcclude = yieldExcludesJson.exclude.some(pattern=>{
+        return minimatch(filePath, pattern);
+    });
+    // 対象外にヒットしたときは true を返す
+    return isEcclude;
+} 
+
+export function hasSkipComment(node: ts.Node, sourceFile: ts.SourceFile): boolean {
+    const leadingComments = ts.getLeadingCommentRanges(sourceFile.text, node.pos);
+    if (!leadingComments) return false;
+
+    for (const commentRange of leadingComments) {
+        const commentText = sourceFile.text.substring(commentRange.pos, commentRange.end);
+        if (commentText.includes( LOOP_YIELD_SKIP_COMMENT )) {
+            return true;
+        }
+    }
+    return false;
+}
 export function isTargetEventAssignment(node: ts.Node): boolean {
 
     // Setter "=" でないとき
@@ -46,112 +73,21 @@ export const getAwaitTargets = (): [string[], string[] ] => {
     return [list, listFull];
 }
 
-const [awaitTargetMethods, awaitTargetFullMethods] = getAwaitTargets();
+const [_, awaitTargetFullMethods] = getAwaitTargets();
 
-// パフォーマンス向上のため、Projectインスタンスはファイル間で使い回す（シングルトン）
-let project: Project | null = null;
-
-function getOrInitProject(rootPath: string): Project {
-    if (project) return project;
-
-    project = new Project({
-        compilerOptions: { target: 99 /* ESNext */ },
-        skipAddingFilesFromTsConfig: true, // 高速化
-    });
-
-    return project;
-}
-export function transformObject(code: string, id: string, /*magicString: MagicString*/): { code: string; map: any } {
-    console.log('transformObject code=', code);
-    const magicString = new MagicString(code)
-    //const awaitTargetMethods = getAwaitTargets();
-    console.log('awaitTargetMethods=', awaitTargetMethods)
-    const currentProject = getOrInitProject(process.cwd());
-    const sourceFile = currentProject.createSourceFile(id, code, { overwrite: true });
-    const typeChecker = currentProject.getTypeChecker();
-    // new Expression の探索
-    sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression).forEach((newExpr) => {
-        const constructorExpression = newExpr.getExpression();
-        console.log('constructorExpression', constructorExpression.getText());        
-    });
-    sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression).forEach((callExpr) => {
-        // 親ノードが AwaitExpression（await構文）であるかを確認
-        const awaitExpr = callExpr.getParentIfKind(SyntaxKind.AwaitExpression);
-        // awaitExpr が存在すれば await が付いている、存在しなければ付いていない
-        const hasAwait = awaitExpr !== undefined;
-        if(hasAwait){
-            // await があれば無視
-            return;
-        }
-        const text = callExpr.getText();
-        console.log('[1]callExpr.getText()= ', text); // this.Control.wait(10) ==>  this.Control.wait(10)
-        const expression = callExpr.getExpression(); // // 型 LeftHandSideExpression<ts.LeftHandSideExpression>
-        if (expression.getKind() === SyntaxKind.PropertyAccessExpression) {
-            const propAccess = expression as PropertyAccessExpression;
-            const methodName = propAccess.getName(); // this.Control.wait(10) ==> wait
-            console.log('[3]propAccess.getText()=', propAccess.getText());
-            console.log('methodName=', methodName);
-            if( awaitTargetMethods.includes(methodName)){
-                const objectExpression = propAccess.getExpression(); // 型 LeftHandSideExpression<ts.LeftHandSideExpression>
-                console.log('[4]objectExpression.getText()=', objectExpression.getText()); // this.Control.wait(10) ==> this.Control
-                
-                const objectName = objectExpression.getKind() === SyntaxKind.PropertyAccessExpression
-                    ? (objectExpression as PropertyAccessExpression).getName()
-                    : objectExpression.getText();
-                const targetText = `${objectName}.${methodName}`;
-                if( !awaitTargetFullMethods.includes(targetText)) {
-                    return false;
-                }
-                // JSDOC を取り込む
-                const _objectType = typeChecker.getTypeAtLocation(objectExpression);
-                _objectType.getProperties().some((prop: Symbol)=> {
-                    const tags = prop.getJsDocTags();
-                    if(tags){
-                        tags.forEach((tag: JSDocTagInfo)=>{
-                            const tagName = tag.getName(); // this.Control.wait(10) ==> wait のJSDOCにある タグ @～
-                            console.log('tagName=', tagName);
-                            if( tagName == 'needsAwait') {
-                                const start = callExpr.getStart();
-                                const end = callExpr.getEnd();
-                                console.log('magicstring appendLeft ', `await ${text}`);
-                                magicString.appendLeft(start, 'await ');
-
-                                // 親メソッドに async をつける
-                                const parentFunction = callExpr.getFirstAncestorByKind(SyntaxKind.FunctionDeclaration)
-                                || callExpr.getFirstAncestorByKind(SyntaxKind.MethodDeclaration)
-                                || callExpr.getFirstAncestorByKind(SyntaxKind.ArrowFunction);
-                                if(parentFunction && 'setIsAsync' in parentFunction && !parentFunction.isAsync()) {
-                                    parentFunction.setIsAsync(true);
-                                }
-                                return true;
-                            }
-                            return false;
-                        });
-                        return false;
-                    }
-                });
-            }
-        }
-    });
-    // map 結合時に sourcesを一致させてマップパイプラインを
-    // つなげるようにする。
-    const baseId = path.basename(id);
-    return {
-        code : magicString.toString(), 
-        map: magicString.generateMap(
-            {
-                hires: true,
-                source: baseId,
-                includeContent: true,
-            })
-    };
-}
-
+/**
+ * Async Generator関数にする
+ * @param rightExpr 
+ * @param visit 
+ * @param inLoop 
+ * @returns 
+ */
 const convertToAsyncGenerator = function (
     rightExpr: ts.FunctionExpression, 
     visit: (n: ts.Node, inLoop?: boolean) => ts.Node, 
     inLoop: boolean
 ): ts.FunctionExpression {
+    
     const hasAsync = rightExpr.modifiers?.some(m => m.kind === ts.SyntaxKind.AsyncKeyword);
     let newModifiers = rightExpr.modifiers || ts.factory.createNodeArray([]);
   

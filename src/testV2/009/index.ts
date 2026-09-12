@@ -4,8 +4,8 @@
  * そして表示する画像を切り替えるメソッドを用意する ( constume.next() )
  */
 
-import { Sprite } from '../008/lib/sprite';
-import { Engine } from '../008/lib/engine';
+import { Sprite } from './lib/sprite';
+import { Engine } from './lib/engine';
 import Cat from '../../../assets/cat.svg';
 
 const sprite = new Sprite();
@@ -16,27 +16,30 @@ sprite.position.y = window.innerHeight/2;
 
 sprite.Control.wait(0.1);
 
+
+let muki = 1;
+const speed = 5;
 sprite.Thread.func = function (this:Sprite){
     this.degree = 0;
     this.Control.wait(1);
     // ずっと繰り返す
     for(;;){
-        this.degree += 5;
-        this.Control.wait(0.03);
+        this.degree += speed * muki;
     }
 }
 const test3 = function (this:Sprite){
-    this.degree = 0;
     // ずっと繰り返す
     for(;;){
-        this.degree += -45;
-        this.Control.wait(1);
-        if(this.degree == 20){
+
+        if(this.degree == 0){
             continue;
         }
-        if(this.degree == 30){
+        if(this.degree == 90){
             break;
         }
+        this.Control.wait(3);
+        muki *= -1;
+
     }
 }
 sprite.Thread.func = test3;

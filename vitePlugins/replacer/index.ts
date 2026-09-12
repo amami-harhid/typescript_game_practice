@@ -2,9 +2,9 @@ import * as ts from 'typescript';
 import type { Plugin } from 'vite';
 import * as path from 'path';
 import remapping from '@ampproject/remapping';
-import { hasSkipComment } from '../vite-plugin-ts-code-replacer/utils/plugins-helpers.ts';
 
 import * as helper from './helper.ts';
+import * as helperMS from './helperMS.ts';
 
 export function vitePluginAutoAwait(): Plugin {
 	let program: ts.Program | null = null;
@@ -62,9 +62,9 @@ export function vitePluginAutoAwait(): Plugin {
 
 			// HMR（ファイルの書き換え）対応：必要に応じてプログラムを再作成
 			const normalizedId = path.normalize(id).replace(/\\/g, '/');
-			// 💡 1. 【超重要】Viteが検知した「エディタからの最新コード」をインメモリに即時上書き保存
+			// 【インメモリ】Viteが検知した「エディタからの最新コード」をインメモリに即時上書き保存
     		inMemoryCache.set(normalizedId, code);
-			// 💡 2. 【超重要】ファイル読み込みをインターセプトするカスタムホストを作成
+			// 【インメモリ】ファイル読み込みをインターセプトするカスタムホストを作成
     		const defaultHost = ts.createCompilerHost(compilerOptions);
 			const customHost: ts.CompilerHost = {
 				...defaultHost,
@@ -112,7 +112,7 @@ export function vitePluginAutoAwait(): Plugin {
         	  		function visit(node: ts.Node, inLoop = false): ts.Node {
 						// 変数定義されたメソッドを async function*() 化する
 						if (ts.isVariableDeclaration(node) && node.initializer && ts.isFunctionExpression(node.initializer)) {
-							console.log('targetVariableNames=', targetVariableNames);
+							//console.log('targetVariableNames=', targetVariableNames);
 							if (ts.isIdentifier(node.name) && targetVariableNames.has(node.name.text)) {
 								const [change, variableNode] = helper.changeAsyncFunction(node, visit, inLoop);
     	    	            	if(change){
@@ -135,13 +135,13 @@ export function vitePluginAutoAwait(): Plugin {
                 			ts.isWhileStatement(node) ||
                 			ts.isDoStatement(node)
 	            		) {
-    	            		if (hasSkipComment(node, rootNode)) {
+    	            		if (helper.hasSkipComment(node, rootNode)) {
         	            		return ts.visitEachChild(node, (n) => visit(n, false), context);
             	    		}
-							const fileName = node.getSourceFile().fileName;
-							console.log('fileName[3]=', fileName);
-							if(fileName.includes('/lib/')){
-								console.log('fileName=',node.getSourceFile().fileName);
+							const filePath = node.getSourceFile().fileName;
+							//console.log('filePath[3]=', filePath);
+							if(helper.isYieldExcluded(filePath)){
+								//console.log('fileName=',node.getSourceFile().fileName);
 								return ts.visitEachChild(node, (n) => visit(n, false), context);
 							}
 							const [change, loopNewStatement] = helper.loopChange(id, node, visit, inLoop);
@@ -174,7 +174,7 @@ export function vitePluginAutoAwait(): Plugin {
 			// ステップ１
 			// await 追加( + 必要に応じて親メソッド定義を async にする)
 			// (magicStringを使う)
-			const transformObjectResult = helper.transformObject(code, id);
+			const transformObjectResult = helperMS.transformObject(code, id);
 			// ステップ２
 			// 繰り返しループの中に yieldをつける ( + 必要に応じて親メソッドを Generator関数にする )
 			// Typescriptの公式変換( 型情報は消えて、Javascript になる )

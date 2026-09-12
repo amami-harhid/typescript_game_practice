@@ -6,6 +6,10 @@ export class Sprite extends SpriteBase{
     private _position: {x: number, y: number} = {x: 0, y: 0};
     constructor() {
         super();
+        const test = [1, 2, 3];
+        for(const num of test){
+            console.log(num);
+        }
     }
     set position (_position: {x: number, y: number}) {
         this._position.x = _position.x;

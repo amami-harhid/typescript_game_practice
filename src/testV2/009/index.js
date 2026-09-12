@@ -3,8 +3,8 @@
  * costumeインスタンスを生成し、costumeに対して画像を登録する
  * そして表示する画像を切り替えるメソッドを用意する ( constume.next() )
  */
-import { Sprite } from '../008/lib/sprite';
-import { Engine } from '../008/lib/engine';
+import { Sprite } from './lib/sprite';
+import { Engine } from './lib/engine';
 import Cat from '../../../assets/cat.svg';
 const sprite = new Sprite();
 sprite.addImage(Cat);

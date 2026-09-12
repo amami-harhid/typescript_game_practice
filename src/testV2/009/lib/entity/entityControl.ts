@@ -1,4 +1,4 @@
-import { controlWait } from "../../../lib/controls";
+import { controlWait } from "../../../../lib/controls";
 //import { needsAwait } from "./decorator";
 /**
  * @abstract
