@@ -1,60 +1,150 @@
 import * as ts from 'typescript';
-
+import { JSDocTagInfo, Project, PropertyAccessExpression, Symbol, SyntaxKind } from 'ts-morph';
+import MagicString from 'magic-string';
 import awaitTargetsJson from './awaitTargets.json' with { type: 'json' };
-export const getAwaitTargets = (): string[] => {
-    const list:string[] = [];
-    for(const item of awaitTargetsJson.targets) {
-        list.push( item.name );
-    }
-    return list;
-}
+import path from 'path';
 
-export const isAwaitAddTransformerVist = function(node: ts.Node, typeChecker: ts.TypeChecker, targetList:string[]): boolean {
-    const _node = node as ts.CallExpression;
-    let targetExpression = _node.expression;
-    if (ts.isPropertyAccessExpression(_node.expression)) {
-        const _name = _node.expression.name.getText();
-        if( targetList.includes( _name )) {
-            let symbol = typeChecker.getSymbolAtLocation(targetExpression);	
-            if (symbol) {
-                // エイリアス（インポート）の解決
-                let declarationSymbol = symbol;
-                if ((symbol.flags & ts.SymbolFlags.Alias) !== 0) {
-                    try {
-                        declarationSymbol = typeChecker.getAliasedSymbol(symbol);
-                    } catch (e) {}
-                }
-                                        
-                const declarations = declarationSymbol.getDeclarations();
-                if (declarations && declarations.length > 0) {
-                    let definitionNode = declarations[0] as ts.Node;
-                                        
-                    // MethodDeclaration まで遡る
-                    while (definitionNode && !ts.isMethodDeclaration(definitionNode) && definitionNode.parent) {
-                        definitionNode = definitionNode.parent;
-                    }
-                    if (ts.isMethodDeclaration(definitionNode)) {
-                        const defSourceFile = definitionNode.getSourceFile();
-                        const defSourceText = defSourceFile.getFullText();
-                        const fullStart = definitionNode.getFullStart();
-                        const nodeStart = definitionNode.getStart(defSourceFile);
-                                        
-                        // クラスのメソッド定義の直前コメントを切り出す
-                        const leadingText = defSourceText.slice(fullStart, nodeStart);
-                        //console.log('leadingText=',leadingText)
-                        if (leadingText.includes('@needsAwait')) {
-                            // すでに await がついていなければ付与
-                            if (node.parent && !ts.isAwaitExpression(node.parent)) {
-                                //console.log('await ++++')
-                                return true;
-                            }
-                        }
-                    }
-                }
+export function isTargetEventAssignment(node: ts.Node): boolean {
+
+    // Setter "=" でないとき
+    if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) {
+        return false;
+    }
+
+    // 左側 が "func"でないとき
+    const left = node.left;
+    if (!ts.isPropertyAccessExpression(left) || left.name.text !== 'func') {
+        return false;
+    }
+
+    let expr = left.expression;
+    if (ts.isCallExpression(expr)) {
+        expr = expr.expression;
+    }
+
+    if (ts.isPropertyAccessExpression(expr)) {
+        //const parentExpr = expr.expression;
+        if (ts.isPropertyAccessExpression(expr)) {
+            const categoryName = expr.name.text;
+            if (categoryName === 'Thread') {
+                return true;
             }
         }
     }
+
     return false;
+}
+
+
+export const getAwaitTargets = (): [string[], string[] ] => {
+    const list:string[] = [];
+    const listFull:string[] = [];
+    for(const item of awaitTargetsJson.targets) {
+        list.push( item.name );
+        listFull.push( item.fullName );
+    }
+    return [list, listFull];
+}
+
+const [awaitTargetMethods, awaitTargetFullMethods] = getAwaitTargets();
+
+// パフォーマンス向上のため、Projectインスタンスはファイル間で使い回す（シングルトン）
+let project: Project | null = null;
+
+function getOrInitProject(rootPath: string): Project {
+    if (project) return project;
+
+    project = new Project({
+        compilerOptions: { target: 99 /* ESNext */ },
+        skipAddingFilesFromTsConfig: true, // 高速化
+    });
+
+    return project;
+}
+export function transformObject(code: string, id: string, /*magicString: MagicString*/): { code: string; map: any } {
+    console.log('transformObject code=', code);
+    const magicString = new MagicString(code)
+    //const awaitTargetMethods = getAwaitTargets();
+    console.log('awaitTargetMethods=', awaitTargetMethods)
+    const currentProject = getOrInitProject(process.cwd());
+    const sourceFile = currentProject.createSourceFile(id, code, { overwrite: true });
+    const typeChecker = currentProject.getTypeChecker();
+    // new Expression の探索
+    sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression).forEach((newExpr) => {
+        const constructorExpression = newExpr.getExpression();
+        console.log('constructorExpression', constructorExpression.getText());        
+    });
+    sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression).forEach((callExpr) => {
+        // 親ノードが AwaitExpression（await構文）であるかを確認
+        const awaitExpr = callExpr.getParentIfKind(SyntaxKind.AwaitExpression);
+        // awaitExpr が存在すれば await が付いている、存在しなければ付いていない
+        const hasAwait = awaitExpr !== undefined;
+        if(hasAwait){
+            // await があれば無視
+            return;
+        }
+        const text = callExpr.getText();
+        console.log('[1]callExpr.getText()= ', text); // this.Control.wait(10) ==>  this.Control.wait(10)
+        const expression = callExpr.getExpression(); // // 型 LeftHandSideExpression<ts.LeftHandSideExpression>
+        if (expression.getKind() === SyntaxKind.PropertyAccessExpression) {
+            const propAccess = expression as PropertyAccessExpression;
+            const methodName = propAccess.getName(); // this.Control.wait(10) ==> wait
+            console.log('[3]propAccess.getText()=', propAccess.getText());
+            console.log('methodName=', methodName);
+            if( awaitTargetMethods.includes(methodName)){
+                const objectExpression = propAccess.getExpression(); // 型 LeftHandSideExpression<ts.LeftHandSideExpression>
+                console.log('[4]objectExpression.getText()=', objectExpression.getText()); // this.Control.wait(10) ==> this.Control
+                
+                const objectName = objectExpression.getKind() === SyntaxKind.PropertyAccessExpression
+                    ? (objectExpression as PropertyAccessExpression).getName()
+                    : objectExpression.getText();
+                const targetText = `${objectName}.${methodName}`;
+                if( !awaitTargetFullMethods.includes(targetText)) {
+                    return false;
+                }
+                // JSDOC を取り込む
+                const _objectType = typeChecker.getTypeAtLocation(objectExpression);
+                _objectType.getProperties().some((prop: Symbol)=> {
+                    const tags = prop.getJsDocTags();
+                    if(tags){
+                        tags.forEach((tag: JSDocTagInfo)=>{
+                            const tagName = tag.getName(); // this.Control.wait(10) ==> wait のJSDOCにある タグ @～
+                            console.log('tagName=', tagName);
+                            if( tagName == 'needsAwait') {
+                                const start = callExpr.getStart();
+                                const end = callExpr.getEnd();
+                                console.log('magicstring appendLeft ', `await ${text}`);
+                                magicString.appendLeft(start, 'await ');
+
+                                // 親メソッドに async をつける
+                                const parentFunction = callExpr.getFirstAncestorByKind(SyntaxKind.FunctionDeclaration)
+                                || callExpr.getFirstAncestorByKind(SyntaxKind.MethodDeclaration)
+                                || callExpr.getFirstAncestorByKind(SyntaxKind.ArrowFunction);
+                                if(parentFunction && 'setIsAsync' in parentFunction && !parentFunction.isAsync()) {
+                                    parentFunction.setIsAsync(true);
+                                }
+                                return true;
+                            }
+                            return false;
+                        });
+                        return false;
+                    }
+                });
+            }
+        }
+    });
+    // map 結合時に sourcesを一致させてマップパイプラインを
+    // つなげるようにする。
+    const baseId = path.basename(id);
+    return {
+        code : magicString.toString(), 
+        map: magicString.generateMap(
+            {
+                hires: true,
+                source: baseId,
+                includeContent: true,
+            })
+    };
 }
 
 const convertToAsyncGenerator = function (
@@ -170,18 +260,22 @@ const transformLoopBody = (
 
         const newStatements: ts.Statement[] = [];
         for (const stmt of node.statements) {
-            if (isTarget(stmt)) {
-                const yieldStatement = createYieldStatement();
-                ts.setTextRange(yieldStatement, node);  // <=== TODO ??? これでいいのかな？
-
-                newStatements.push(createYieldStatement());
-            }
+            // if (isTarget(stmt)) {
+            //     const yieldStatement = createYieldStatement();
+            //     newStatements.push(yieldStatement);
+            // }
             newStatements.push(ts.visitNode(stmt, visit) as ts.Statement);
         }
 
         const yieldStmt = createYieldStatement();
 
         const lastStmt = node.statements[node.statements.length - 1];
+        let isExitsyield = false;
+        const lastStatementExpression = (lastStmt as ts.ExpressionStatement).expression;
+        if(ts.isYieldExpression(lastStatementExpression)) {
+            console.log('Last statement is yield')
+            isExitsyield = true;
+        } 
         const trailingCommentsOfLastStmt = ts.getTrailingCommentRanges(sourceFile.text, lastStmt.end);
     
         const scanStartPos = (trailingCommentsOfLastStmt && trailingCommentsOfLastStmt.length > 0)
@@ -208,8 +302,9 @@ const transformLoopBody = (
                 );
             }
         }
-
-        newStatements.push(yieldStmt);
+        if(isExitsyield === false){
+            newStatements.push(yieldStmt);
+        }
         return ts.factory.updateBlock(node, newStatements);
     }
 
@@ -281,16 +376,28 @@ export const loopChange = (id: string, node: ts.Node, visit:Visit, inLoop:boolea
     return [false, node];
 }
 
-const transformIfBody = ( node: ts.Statement, visit: Visit): [boolean, ts.Statement] => {
+export const transformIfBody = ( node: ts.Statement, visit: Visit): [boolean, ts.Statement] => {
     if (ts.isBlock(node)) {
         const newStatements: ts.Statement[] = [];
         let updateFlg = false;
+        let prevStatement: ts.Statement | null = null;
         for (const stmt of node.statements) {
             if (isTarget(stmt)) {
-                newStatements.push(createYieldStatement());
+                // statement が break, continueのとき 
+                if(prevStatement){
+                    const prev = prevStatement as ts.ExpressionStatement;
+                    if(!ts.isYieldExpression(prev.expression)) {
+                        // 直前が yield でないとき
+                        newStatements.push(createYieldStatement());
+                    }
+                }else{
+                    // 直前がないとき
+                    newStatements.push(createYieldStatement());
+                }
                 updateFlg = true;
             }
             newStatements.push(ts.visitNode(stmt, visit) as ts.Statement);
+            prevStatement = stmt;
         }
         if(updateFlg){
             return [true, ts.factory.updateBlock(node, newStatements)];
