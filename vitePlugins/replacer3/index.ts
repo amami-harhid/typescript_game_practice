@@ -4,7 +4,6 @@ import * as path from 'path';
 import MagicString from "magic-string";
 
 import { isAwaitAddTransformerVist, getAwaitTargets, directAsyncFunction, loopChange, changeAsyncFunction, isTargetEventAssignment, transformIfBody } from './helper.ts';
-import { hasSkipComment } from '../vite-plugin-ts-code-replacer/utils/plugins-helpers.ts';
 
 export function vitePluginAutoAwait(): Plugin {
 	let program: ts.Program | null = null;
@@ -51,9 +50,6 @@ export function vitePluginAutoAwait(): Plugin {
 			//compilerOptions.experimentalDecorators = false;
 			configFileNames = configParseResult.fileNames;
 
-	      	// プロジェクト全体のファイルを最初からすべて含んだ Program を作成
-    	  	program = ts.createProgram(configParseResult.fileNames, compilerOptions);
-			typeChecker = program.getTypeChecker();
     	},
 		buildEnd() {
 			//targetVariableNames.clear();
@@ -61,6 +57,7 @@ export function vitePluginAutoAwait(): Plugin {
 			program = null;
 		},
 	    transform(code: string, id: string) {
+        const printer = ts.createPrinter({ removeComments: false });
       // .ts または .tsx ファイル以外はスキップ
       if (!id.match(/\.tsx?$/)) return;
 
@@ -82,6 +79,7 @@ export function vitePluginAutoAwait(): Plugin {
       
       // 元のソースファイルを読み込ませず、Viteから渡された現在のコードを使用する
       host.getSourceFile = (fileName, languageVersion) => {
+        console.log('getSourceFile fileName=', fileName)
         if (fileName === id) {
           return ts.createSourceFile(id, code, languageVersion, true);
         }
@@ -91,18 +89,36 @@ export function vitePluginAutoAwait(): Plugin {
 
       // 3. 【最重要】出力を横取りするフック
       host.writeFile = (fileName, text) => {
-        console.log(`★ writeFile が呼ばれました: ${fileName}`); // デバッグ用ログ
+        //console.log(`★ writeFile が呼ばれました: ${fileName}`); // デバッグ用ログ
         if (fileName.endsWith('.ts') || fileName.endsWith('.js') || fileName.endsWith('.jsx')) {
           outputCode = text;
         } else if (fileName.endsWith('.js.map')) {
           sourceMap = text;
         }
       };
-
+	      	// プロジェクト全体のファイルを最初からすべて含んだ Program を作成
+    	  	program = ts.createProgram([id], compilerOptions);
+			typeChecker = program.getTypeChecker();
+        const sourceFile = program.getSourceFile(id);
+        if(!sourceFile) return;
       // 4. Transformer（置換処理）の定義
       const transformerFactory: ts.TransformerFactory<ts.SourceFile> = (context) => {
+        //console.log('transformerFactory');
         return (rootNode) => {
-          const visit = (node: ts.Node): ts.Node => {
+          const visit = (node: ts.Node, inLoop: boolean = false): ts.Node => {
+            //console.log('visit');
+            // 直接のイベント代入の検知と変換
+				    if (isTargetEventAssignment(node)) {
+					    const [change, updateBinaryExpression] = directAsyncFunction(node, visit, inLoop);
+					    if(change){
+                console.log('直接のイベント代入の検知と変換 change = ', change)
+                const generatedCode = printer.printNode(ts.EmitHint.Unspecified, updateBinaryExpression, sourceFile);
+                console.log('直接のイベント代入の検知と変換 generatedCode=', generatedCode)
+						    return updateBinaryExpression;
+                //return ts.visitEachChild(updateBinaryExpression, visit, context);
+					    }
+				    }
+
             // ここでノードの置換処理を行う
             // 例: if (ts.isIdentifier(node) && node.text === 'foo') ...
             return ts.visitEachChild(node, visit, context);
@@ -112,11 +128,12 @@ export function vitePluginAutoAwait(): Plugin {
       };
 
       // 5. プログラムを作成
-      const program = ts.createProgram([id], compilerOptions, host);
-
+      //const program = ts.createProgram([id], compilerOptions, host);
+      //console.log('program=', program)
+	  if(!program) return;
       // 6. emit の第5引数にトランスフォーマーを直接渡して実行
       const emitResult = program.emit(
-        undefined, // targetSourceFile (undefined で全ファイル対象、今回はidのみ)
+        sourceFile, // targetSourceFile (undefined で全ファイル対象、今回はidのみ)
         undefined, // writeFile (host.writeFile が使われるため undefined)
         undefined, // cancellationToken
         undefined, // emitOnlyDtsFiles

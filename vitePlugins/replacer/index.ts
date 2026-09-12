@@ -296,7 +296,7 @@ export function vitePluginAutoAwait(): Plugin {
     		const mapObject = typeof rawMapStr === 'string' ? JSON.parse(rawMapStr) : JSON.parse(JSON.stringify(rawMapStr));
 
     		// 6. ブラウザ F12 用のパス解決（元TS と 変換後JS の2面表示に対応）
-    		const projectRoot = process.cwd().replace(/\\/g, '/');
+    		const projectRoot = process.cwd().replace(/\\/g, '/') + '/src';
     		let relativePath = id.replace(/\\/g, '/').replace(projectRoot, '');
     		if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
 
@@ -319,7 +319,7 @@ export function vitePluginAutoAwait(): Plugin {
     		const mapJsonString = JSON.stringify(safeMap);
     		const base64Map = Buffer.from(mapJsonString).toString('base64');
       		const sourceMappingComment = `\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64Map}`;
-
+			console.log(safeMap);
       		return {
         		code: finalCode + sourceMappingComment,
         		map: safeMap

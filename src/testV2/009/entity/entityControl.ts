@@ -1,16 +1,17 @@
 import { controlWait } from "../../../lib/controls";
-import { needsAwait } from "./decorator";
+//import { needsAwait } from "./decorator";
 /**
  * @abstract
+ * @needsAwait
  */
 export class EntityControl {
 
     /**
-     * あいうえお
-     * @param seconds 
-     * 
+     * あいうえお<br>
+     * needsAwait
+     * @param seconds
+     * @needsAwait 
      */
-    @needsAwait
     async wait( seconds: number ): Promise<void> {
         await controlWait(seconds);
     }
