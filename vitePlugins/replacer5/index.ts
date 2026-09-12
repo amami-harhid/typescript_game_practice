@@ -1,11 +1,12 @@
 import * as ts from 'typescript';
 import type { Plugin } from 'vite';
 import * as path from 'path';
-import remapping from '@ampproject/remapping'
+import remapping from '@ampproject/remapping';
+import MagicString from 'magic-string';
 import { Project, VariableDeclaration } from 'ts-morph';
-import { isTargetEventAssignment, hasSkipComment } from '../vite-plugin-ts-code-replacer/utils/plugins-helpers.ts';
+import { hasSkipComment } from '../vite-plugin-ts-code-replacer/utils/plugins-helpers.ts';
 
-import { isAwaitAddTransformerVist, getAwaitTargets, changeAsyncFunction, directAsyncFunction, loopChange, transformObject, transformIfBody } from './helper.ts';
+import { isTargetEventAssignment, isAwaitAddTransformerVist, getAwaitTargets, changeAsyncFunction, directAsyncFunction, loopChange, transformObject, transformIfBody } from './helper.ts';
 
 export function vitePluginAutoAwait(): Plugin {
 	let program: ts.Program | null = null;
@@ -54,7 +55,7 @@ export function vitePluginAutoAwait(): Plugin {
     	  	program = ts.createProgram(configParseResult.fileNames, compilerOptions);
     	},
 		buildEnd() {
-			targetVariableNames.clear();
+			//targetVariableNames.clear();
 			inMemoryCache.clear();
 			program = null;
 		},
@@ -101,15 +102,16 @@ export function vitePluginAutoAwait(): Plugin {
 			if (!currentSourceFile) return null;
 
 	      	let isModified = false;
-
+			targetVariableNames.clear();
 			
 			const mainTransformer = (context: ts.TransformationContext) => {
 				//console.log('awaitAddTransformer[1]')
     	    	return (rootNode: ts.SourceFile) => {
 
-					function preScan(node: ts.Node): void {
-						targetVariableNames.clear();
+					function preScan(node: ts.Node): void {						
+						//console.log('prescan')
 						if (isTargetEventAssignment(node)) {
+							//console.log('prescan isTargetEventAssingment')
 							const binaryExpr = node as ts.BinaryExpression;
 							if (ts.isIdentifier(binaryExpr.right)) {
 								targetVariableNames.add(binaryExpr.right.text);
@@ -122,6 +124,7 @@ export function vitePluginAutoAwait(): Plugin {
         	  		function visit(node: ts.Node, inLoop = false): ts.Node {
 						// 変数定義されたメソッドを async function*() 化する
 						if (ts.isVariableDeclaration(node) && node.initializer && ts.isFunctionExpression(node.initializer)) {
+							console.log('targetVariableNames=', targetVariableNames);
 							if (ts.isIdentifier(node.name) && targetVariableNames.has(node.name.text)) {
 								const [change, variableNode] = changeAsyncFunction(node, visit, inLoop);
     	    	            	if(change){
@@ -180,8 +183,11 @@ export function vitePluginAutoAwait(): Plugin {
 				}
 			};
 
-			// firstStep
-			const transpileResult = ts.transpileModule(code, {
+
+			// await 追加( + 必要に応じて親メソッド定義を async にする)
+			const transformObjectResult = transformObject(code, id);
+			// 繰り返しループの中に yieldをつける ( + 必要に応じて親メソッドを Generator関数にする )
+			const transpileResult = ts.transpileModule(transformObjectResult.code, {
 				compilerOptions: compilerOptions,
 				fileName: id,
 				transformers: {
@@ -190,26 +196,28 @@ export function vitePluginAutoAwait(): Plugin {
                         ]
                     }
 			});
-
-			const transformObjectResult = transformObject(transpileResult.outputText, id, program);
-
+			const finalCode = transpileResult.outputText; //.replaceAll(/\/\*await\*\//g, 'await');
 			if (transpileResult.sourceMapText && transformObjectResult.map) {
-				// TypeScriptが生成したマップをオブジェクトに変換
-				const map1 = JSON.parse(transpileResult.sourceMapText);
 				// MagicStringが生成したマップ
-				const map2 = transformObjectResult.map;
+				const map1 = transformObjectResult.map;
+				//map1.sources = [targetFileName];
+				// TypeScriptが生成したマップをオブジェクトに変換
+				const map2 = JSON.parse(transpileResult.sourceMapText);
+
 				// 2つを結合（最新のmap2から、過去のmap1へと遡るツリーを作る)
+				map1.sources[0] = map2.sources[0]; // sourcesの中身を一致させることで 元コードをF12(source)に出現させる
 				const mergedMap = remapping(
                         [map2, map1],
                         () => null
                     );
+				mergedMap.sourcesContent = [code]; 
 				return {
-					code: transformObjectResult.code,
+					code: finalCode, 
 					map: mergedMap,
 				}
 			}
       		return {
-        		code: transformObjectResult.code,
+        		code: finalCode,
         		map: transformObjectResult.map? transformObjectResult.map: null,
       		};		
 		}

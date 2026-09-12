@@ -3,6 +3,38 @@ import { ExpressionStatement, JSDocTagInfo, Project, PropertyAccessExpression, S
 import MagicString from 'magic-string';
 import awaitTargetsJson from './awaitTargets.json' with { type: 'json' };
 
+export function isTargetEventAssignment(node: ts.Node): boolean {
+
+    // Setter "=" でないとき
+    if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) {
+        return false;
+    }
+
+    // 左側 が "func"でないとき
+    const left = node.left;
+    if (!ts.isPropertyAccessExpression(left) || left.name.text !== 'func') {
+        return false;
+    }
+
+    let expr = left.expression;
+    if (ts.isCallExpression(expr)) {
+        expr = expr.expression;
+    }
+
+    if (ts.isPropertyAccessExpression(expr)) {
+        //const parentExpr = expr.expression;
+        if (ts.isPropertyAccessExpression(expr)) {
+            const categoryName = expr.name.text;
+            if (categoryName === 'Thread') {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+
 export const getAwaitTargets = (): string[] => {
     const list:string[] = [];
     for(const item of awaitTargetsJson.targets) {
@@ -24,13 +56,14 @@ function getOrInitProject(rootPath: string): Project {
 
     return project;
 }
-export function transformObject(code: string, id: string, program: ts.Program): { code: string; map: any } {
+export function transformObject(code: string, id: string, /*magicString: MagicString*/): { code: string; map: any } {
+    console.log('transformObject code=', code);
+    const magicString = new MagicString(code)
     const awaitTargetMethods = getAwaitTargets();
     console.log('awaitTargetMethods=', awaitTargetMethods)
     const currentProject = getOrInitProject(process.cwd());
     const sourceFile = currentProject.createSourceFile(id, code, { overwrite: true });
     const typeChecker = currentProject.getTypeChecker();
-    const magicString = new MagicString(code);
     // new Expression の探索
     sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression).forEach((newExpr) => {
         const constructorExpression = newExpr.getExpression();
@@ -46,13 +79,13 @@ export function transformObject(code: string, id: string, program: ts.Program): 
             return;
         }
         const text = callExpr.getText();
-        //console.log('[1]callExpr.getText()= ', text); // this.Control.wait(10) ==>  this.Control.wait(10)
+        console.log('[1]callExpr.getText()= ', text); // this.Control.wait(10) ==>  this.Control.wait(10)
         const expression = callExpr.getExpression(); // // 型 LeftHandSideExpression<ts.LeftHandSideExpression>
         //console.log('[2]callExpr.expression.getText()= ', expression.getText()); // this.Control.wait(10) ==>  this.Control.wait
         if (expression.getKind() === SyntaxKind.PropertyAccessExpression) {
             const propAccess = expression as PropertyAccessExpression;
             const methodName = propAccess.getName(); // this.Control.wait(10) ==> wait
-            //console.log('methodName=', methodName);
+            console.log('methodName=', methodName);
             if( awaitTargetMethods.includes(methodName)){
                 //console.log('[3]methodName=', methodName);
                 const objectExpression = propAccess.getExpression(); // 型 LeftHandSideExpression<ts.LeftHandSideExpression>
@@ -65,18 +98,32 @@ export function transformObject(code: string, id: string, program: ts.Program): 
                     if(tags){
                         tags.forEach((tag: JSDocTagInfo)=>{
                             const tagName = tag.getName(); // this.Control.wait(10) ==> wait のJSDOCにある タグ @～
-                            //console.log('tagName=', tagName);
+                            console.log('tagName=', tagName);
                             if( tagName == 'needsAwait') {
                                 const start = callExpr.getStart();
                                 const end = callExpr.getEnd();
-                                magicString.overwrite(start, end, `await ${text};`);
+                                console.log('magicstring appendLeft ', `await ${text}`);
+                                magicString.appendLeft(start, 'await ');
+
+                                // 親メソッドに async をつける
+                                const parentFunction = callExpr.getFirstAncestorByKind(SyntaxKind.FunctionDeclaration)
+                                || callExpr.getFirstAncestorByKind(SyntaxKind.MethodDeclaration)
+                                || callExpr.getFirstAncestorByKind(SyntaxKind.ArrowFunction);
+                                if(parentFunction && 'setIsAsync' in parentFunction && !parentFunction.isAsync()) {
+                                    //const functionStart = parentFunction.getStart();
+                                    //magicString.appendLeft(functionStart, "async ");
+                                    parentFunction.setIsAsync(true);
+                                }
+                                return true;
                             }
+                            return false;
                             // console.log('7 tags tagName=', tagName);
                             // const tagText = tag.getText();
                             // tagText.forEach((text: ts.SymbolDisplayPart)=>{
                             //     console.log('7 tags tagText=', text);
                             // });
                         });
+                        return false;
                     }
                 });
             }
@@ -99,7 +146,15 @@ export function transformObject(code: string, id: string, program: ts.Program): 
         }
     });
 
-    return {code : magicString.toString(), map: magicString.generateMap({hires: true})};
+    return {
+        code : magicString.toString(), 
+        map: magicString.generateMap(
+            {
+                hires: true,
+                source: id,
+                includeContent: true,
+            })
+    };
 }
 // TODO 不要になったので消すこと
 export const isAwaitAddTransformerVist = function(node: ts.Node, typeChecker: ts.TypeChecker, targetList:string[]): boolean {

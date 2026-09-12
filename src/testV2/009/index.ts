@@ -16,30 +16,27 @@ sprite.position.y = window.innerHeight/2;
 
 sprite.Control.wait(0.1);
 
-sprite.Thread.func = async function* (this:Sprite){
+sprite.Thread.func = function (this:Sprite){
     this.degree = 0;
     this.Control.wait(1);
     // ずっと繰り返す
     for(;;){
         this.degree += 5;
-        await this.Control.wait(0.03);
+        this.Control.wait(0.03);
     }
 }
-const test3 = async function*(this:Sprite){
+const test3 = function (this:Sprite){
     this.degree = 0;
     // ずっと繰り返す
     for(;;){
         this.degree += -45;
-        await this.Control.wait(1);
+        this.Control.wait(1);
         if(this.degree == 20){
-            yield;
             continue;
         }
         if(this.degree == 30){
-            yield;
             break;
         }
-        yield;
     }
 }
 sprite.Thread.func = test3;
