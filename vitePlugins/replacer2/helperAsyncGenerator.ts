@@ -44,7 +44,7 @@ const funcToAsyncGenerator = (expr: Expression<ts.Expression>): boolean => {
     let hasChanged = false;
     const funcExpr = expr.asKindOrThrow(SyntaxKind.FunctionExpression);
     if (!funcExpr.isAsync() && !funcExpr.isGenerator()) {
-        console.log('not async generator');
+        //console.log('not async generator');
         // async 属性を true に書き換える
         //funcExpr.setIsAsync(true);
         const start = funcExpr.getStart();
@@ -55,7 +55,7 @@ const funcToAsyncGenerator = (expr: Expression<ts.Expression>): boolean => {
         });
         hasChanged = true;
     }else if(!funcExpr.isAsync()) {
-        console.log('not async');
+        //console.log('not async');
         const start = funcExpr.getStart();
         replacements.push({
             start: start,
@@ -64,7 +64,7 @@ const funcToAsyncGenerator = (expr: Expression<ts.Expression>): boolean => {
         });
         hasChanged = true;
     }else if(!funcExpr.isGenerator()) {
-        console.log('not generator');
+        //console.log('not generator');
         const start = funcExpr.getStart();
         replacements.push({
             start: start,

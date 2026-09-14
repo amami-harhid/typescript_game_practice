@@ -57,7 +57,7 @@ let positionFlg = -1;
 
 sprite.Thread.func = () => {
     for(;;){
-        (this as unknown  as Sprite).Control.wait(1);
+        (this as unknown  as Sprite).Control.wait(0.5);
         positionFlg *= -1;
     }
 }

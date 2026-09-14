@@ -94,9 +94,9 @@ export function transformObject(code: string, id: string ): { code: string; map:
                             const tagName = tag.getName(); // this.Control.wait(10) ==> wait のJSDOCにある タグ @～
                             //console.log('tagName=', tagName);
                             if( tagName == 'needsAwait') {
-                                console.log('==== needsAwaot [1] ====')
+                                //console.log('==== needsAwaot [1] ====')
                                 const start = callExpr.getStart();
-                                console.log('==== needsAwaot [2] ====')
+                                //console.log('==== needsAwaot [2] ====')
                                 //const end = callExpr.getEnd();
                                 //console.log('magicstring appendLeft ', `await ${text}`);
                                 // 左側に("await ")を追加する
