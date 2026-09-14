@@ -14,13 +14,9 @@
     "devDependencies": {
         "@ampproject/remapping": "^2.3.0",
         "@babel/core": "^7.29.7",
-        "@babel/parser": "^7.27.1",
-        "@babel/plugin-proposal-decorators": "^7.29.7",
-        "@rolldown/plugin-babel": "^0.2.4",
         "@types/node": "^25.9.1",
         "eslint": "^9.39.4",
         "estree-walker": "^3.0.3",
-        "fast-xml-parser": "^5.11.1",
         "glob": "^10.5.0",
         "magic-string": "^1.1.1",
         "minimatch": "^10.2.6",
@@ -30,5 +26,8 @@
         "vite": "^8.2.1",
         "vite-plugin-checker": "^0.14.5",
         "vite-plugin-dts": "^5.0.3"
+    },
+    "dependencies": {
+        "@types/typescript": "^0.4.29"
     }
 }

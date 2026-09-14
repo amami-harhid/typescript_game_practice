@@ -128,7 +128,8 @@ export class Engine {
     }
 }
 const Interval = 1000/30;
-type Thread = CallableFunction;
+
+type Thread = CallableFunction　;
 export type ThreadCaller = Thread;
 type ThreadGenerator =  AsyncGenerator<unknown, never, unknown>;
 type ThreadGeneratorCaller =  ()=>ThreadGenerator;

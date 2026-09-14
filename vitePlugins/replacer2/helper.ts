@@ -3,13 +3,18 @@ import awaitTargetsJson from './awaitTargets.json' with { type: 'json' };
 import { LOOP_YIELD_SKIP_COMMENT } from './loopYieldSkipMark.ts';
 import { minimatch } from 'minimatch';
 import yieldExcludesJson from './yieldExcludes.json' with { type: 'json' };
+import targetIdsJson from './targetIds.json' with { type: 'json'};
 
-export function isTargetId(id: string): boolean {
-    if (!id.endsWith('.ts') && !id.endsWith('.tsx') || id.includes('node_modules')) 
-        return false;
-    if (!id.includes('testV2') || id.includes('/lib/')) 
-        return false
-    return true;
+/**
+ * 置換非対象の id ( = path ) を判定する
+ * @param id 
+ * @returns 
+ */
+export function isTargetIdExcluded(id: string): boolean {
+    const isExclude = targetIdsJson.exclude.some(pattern=>{
+        return minimatch(id, pattern);
+    })
+    return isExclude;
 }
 
 /**
@@ -20,13 +25,19 @@ export function isTargetId(id: string): boolean {
 export function isYieldExcluded(filePath: string): boolean {
     // 「～～/lib/...」のように前方に任意の文字を許容したい場合は、
     // パターンの先頭に `**` があるとします。
-    const isEcclude = yieldExcludesJson.exclude.some(pattern=>{
+    const isExclude = yieldExcludesJson.exclude.some(pattern=>{
         return minimatch(filePath, pattern);
     });
     // 対象外にヒットしたときは true を返す
-    return isEcclude;
+    return isExclude;
 } 
 
+/**
+ * ループの前に「スキップコメント」があるかを判定する
+ * @param node 
+ * @param sourceFile 
+ * @returns 
+ */
 export function hasSkipComment(node: ts.Node, sourceFile: ts.SourceFile): boolean {
     const leadingComments = ts.getLeadingCommentRanges(sourceFile.text, node.pos);
     if (!leadingComments) return false;
@@ -39,38 +50,11 @@ export function hasSkipComment(node: ts.Node, sourceFile: ts.SourceFile): boolea
     }
     return false;
 }
-export function isTargetEventAssignment(node: ts.Node): boolean {
 
-    // Setter "=" でないとき
-    if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) {
-        return false;
-    }
-
-    // 左側 が "func"でないとき
-    const left = node.left;
-    if (!ts.isPropertyAccessExpression(left) || left.name.text !== 'func') {
-        return false;
-    }
-
-    let expr = left.expression;
-    if (ts.isCallExpression(expr)) {
-        expr = expr.expression;
-    }
-
-    if (ts.isPropertyAccessExpression(expr)) {
-        //const parentExpr = expr.expression;
-        if (ts.isPropertyAccessExpression(expr)) {
-            const categoryName = expr.name.text;
-            if (categoryName === 'Thread') {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-
+/**
+ * await を付与するメソッド名を配列化して返す。
+ * @returns 
+ */
 export const getAwaitTargets = (): [string[], string[] ] => {
     const list:string[] = [];
     const listFull:string[] = [];
@@ -79,43 +63,6 @@ export const getAwaitTargets = (): [string[], string[] ] => {
         listFull.push( item.fullName );
     }
     return [list, listFull];
-}
-
-const [_, awaitTargetFullMethods] = getAwaitTargets();
-
-/**
- * Async Generator関数にする
- * @param rightExpr 
- * @param visit 
- * @param inLoop 
- * @returns 
- */
-const convertToAsyncGenerator = function (
-    rightExpr: ts.FunctionExpression, 
-    visit: (n: ts.Node, inLoop?: boolean) => ts.Node, 
-    inLoop: boolean
-): ts.FunctionExpression {
-    
-    const hasAsync = rightExpr.modifiers?.some(m => m.kind === ts.SyntaxKind.AsyncKeyword);
-    let newModifiers = rightExpr.modifiers || ts.factory.createNodeArray([]);
-  
-    if (!hasAsync) {
-        newModifiers = ts.factory.createNodeArray([
-            ts.factory.createModifier(ts.SyntaxKind.AsyncKeyword),
-            ...newModifiers
-        ]);
-    }
-
-    return ts.factory.updateFunctionExpression(
-        rightExpr,
-        newModifiers,
-        ts.factory.createToken(ts.SyntaxKind.AsteriskToken),
-        rightExpr.name,
-        rightExpr.typeParameters,
-        rightExpr.parameters,
-        rightExpr.type,
-    ts.visitNode(rightExpr.body, (n) => visit(n, inLoop)) as ts.Block
-    );
 }
 
 type Visit = (node: ts.Node, inLoop?: boolean) => ts.Node;
@@ -128,45 +75,6 @@ interface PluginError extends Error {
     frame?: string;
 }
 
-/** 変数定義されたメソッドを async function*() 化する */ 
-const changeAsyncFunction = (node: ts.Node, visit:Visit, inLoop:boolean) : [boolean, ts.Node] => {
-    const _node = node as ts.VariableDeclaration;
-    if(_node.initializer && ts.isFunctionExpression(_node.initializer)){
-        const updatedFunction = convertToAsyncGenerator(_node.initializer, visit, inLoop);
-        const variableNode = ts.factory.updateVariableDeclaration(
-            _node,
-            _node.name,
-            _node.exclamationToken,
-            _node.type,
-            updatedFunction
-        );
-        //ts.setTextRange(variableNode, _node);
-        return [true, variableNode] 
-
-    }
-    return [false, node];
-}
-/** 直接のイベント代入の検知と変換 */
-const directAsyncFunction = (node: ts.Node, visit:Visit, inLoop:boolean): [boolean, ts.Node] => {
-
-    const binaryExpr = node as unknown as  ts.BinaryExpression;
-    const rightExpr = binaryExpr.right;
-    
-    if (ts.isFunctionExpression(rightExpr)) {
-        const updatedFunction = convertToAsyncGenerator(rightExpr, visit, inLoop);
-        const updateBinaryExpression = ts.factory.updateBinaryExpression(
-            binaryExpr,
-            binaryExpr.left,
-            binaryExpr.operatorToken,
-            updatedFunction
-        );
-        //ts.setTextRange(updateBinaryExpression, node);
-        //isModified = true;
-        return [true, updateBinaryExpression];
-    }else{
-        return [false, node];
-    }
-}
 
 /** yieldを付ける場所 */
 const isTarget = (node: ts.Node): boolean => {
@@ -178,6 +86,13 @@ const createYieldStatement = (): ts.ExpressionStatement => {
         ts.factory.createYieldExpression(undefined, undefined)
     );
 }
+/**
+ * 繰返しのブロックの中の置換処理
+ * @param node 
+ * @param visit 
+ * @param id 
+ * @returns 
+ */
 const transformLoopBody = (
         node: ts.Statement, 
         visit: (n: ts.Node, inLoop?: boolean) => ts.Node, 
@@ -204,10 +119,6 @@ const transformLoopBody = (
 
         const newStatements: ts.Statement[] = [];
         for (const stmt of node.statements) {
-            // if (isTarget(stmt)) {
-            //     const yieldStatement = createYieldStatement();
-            //     newStatements.push(yieldStatement);
-            // }
             newStatements.push(ts.visitNode(stmt, visit) as ts.Statement);
         }
 
@@ -278,48 +189,49 @@ const transformLoopBody = (
     newStatements.push(createYieldStatement());
     return ts.factory.createBlock(newStatements, true);
 }
-/** LOOP の置換 */
+/**
+ * LOOP の置換
+ * ブロックの最後に yield をつける
+ */
 export const loopChange = (id: string, node: ts.Node, visit:Visit, inLoop:boolean): [boolean, ts.Node] => {
     
     if (ts.isForStatement(node)) {
         const _node = node as ts.ForStatement
         const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
         const forStatement = ts.factory.updateForStatement(node, _node.initializer, _node.condition, _node.incrementor, updatedBody);
-        //ts.setTextRange(forStatement, node);
-        //isModified = true;
         return [true,forStatement];
     }else if (ts.isForInStatement(node)) {
         const _node = node as ts.ForInStatement
         const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
         const forInStatemnet = ts.factory.updateForInStatement(node, _node.initializer, _node.expression, updatedBody);
-        //ts.setTextRange(forInStatemnet, node);
-        //isModified = true;
         return [true, forInStatemnet];
     }else if (ts.isForOfStatement(node)) {
         const _node = node as ts.ForOfStatement;
         const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
         const forOfStatement = ts.factory.updateForOfStatement(node, _node.awaitModifier, _node.initializer, _node.expression, updatedBody);
-        //ts.setTextRange(forOfStatement, node);
-        //isModified = true;
         return [true, forOfStatement];
     }else if (ts.isWhileStatement(node)) {
         const _node = node as ts.WhileStatement;
         const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
         const whileStatement = ts.factory.updateWhileStatement(node, _node.expression, updatedBody);
-        //ts.setTextRange(whileStatement, node);
-        //isModified = true;
         return [true, whileStatement];
     }else if (ts.isDoStatement(node)) {
         const _node = node as ts.DoStatement;
         const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
         const doStatement = ts.factory.updateDoStatement(node, updatedBody, _node.expression);
-        //ts.setTextRange(doStatement, node);
-        //isModified = true;
         return [true, doStatement];
     }
     return [false, node];
 }
 
+/**
+ * if文/else文の中に continue,break があれば、直前に yieldをつける
+ * yieldをつけるときは { }がないときは { }をつける
+ * なお、ループの中で呼び出される前提である
+ * @param node 
+ * @param visit 
+ * @returns 
+ */
 export const transformIfBody = ( node: ts.Statement, visit: Visit): [boolean, ts.Statement] => {
     if (ts.isBlock(node)) {
         const newStatements: ts.Statement[] = [];

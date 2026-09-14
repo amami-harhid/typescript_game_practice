@@ -54,17 +54,12 @@ sprite.Thread.func = function (this:Sprite){
     }
 }
 let positionFlg = -1;
-const start = function(this:Sprite) {
 
-    this.Thread.func = () => {
-        for(;;){
-            this.Control.wait(1);
-            positionFlg *= -1;
-        }
+sprite.Thread.func = () => {
+    for(;;){
+        (this as unknown  as Sprite).Control.wait(1);
+        positionFlg *= -1;
     }
-
 }
-start.bind(sprite)();
-
 
 Engine.run();

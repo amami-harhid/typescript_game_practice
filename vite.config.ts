@@ -6,7 +6,6 @@ import { defineConfig } from 'vite'
 import { glob } from 'glob'
 import checker from 'vite-plugin-checker';
 import { vitePluginAutoAwait } from './vitePlugins/replacer2/index.ts';
-import babel from "@rolldown/plugin-babel"
 
 // ルートとするディレクトリー
 //const root = resolve(import.meta.dirname, './src/')
@@ -38,19 +37,13 @@ export default defineConfig({
         devSourcemap: true
     },
     plugins: [
-        /* Decorator用 */
-        babel({
-            presets: [{
-                preset: ()=> ({plugins: [["@babel/plugin-proposal-decorators", { version: "2023-11" }]]}),
-                rolldown: { filter: { code: "@" } },
-            }]
-        }),
+
         //TsCodeReplacer(),
         vitePluginAutoAwait(),
         checker({
             typescript: true,
             // eslint: {
-            //     lintCommand: `eslint "${resolve(import.meta.dirname, './src/testV2/**/*.{ts,tsx}')}"`,
+            //      lintCommand: `eslint "${resolve(import.meta.dirname, './src/testV2/**/*.{ts,tsx}')}"`,
             // }
         })
     ],

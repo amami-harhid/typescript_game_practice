@@ -53,13 +53,10 @@ export function vitePluginAutoAwait(): Plugin {
 		},
 	    transform(code, id) {
     		// node_modules やに対象外のファイルはスルー
-			if( !helper.isTargetId(id)) {
+			if( helper.isTargetIdExcluded(id)) {
 				return null;
 			}
     		if (!program) return null;
-			//const typeChecker = program.getTypeChecker();
-
-
 
 			// HMR（ファイルの書き換え）対応：必要に応じてプログラムを再作成
 			const normalizedId = path.normalize(id).replace(/\\/g, '/');

@@ -34,6 +34,12 @@ function getOrInitProject(rootPath: string): Project {
 // 置換位置を記録するための配列
 const replacements: { start: number; end: number; text: string }[] = [];
 
+/**
+ * function を async function* とする
+ * 置換結果はMagicStringへ書き込む
+ * @param expr 
+ * @returns 
+ */
 const funcToAsyncGenerator = (expr: Expression<ts.Expression>): boolean => {
     let hasChanged = false;
     const funcExpr = expr.asKindOrThrow(SyntaxKind.FunctionExpression);
@@ -69,6 +75,11 @@ const funcToAsyncGenerator = (expr: Expression<ts.Expression>): boolean => {
     }
     return hasChanged;
 }
+/**
+ * アロー関数を async function* へと置換する
+ * @param expr 
+ * @returns 
+ */
 const arrowToAsyncGenerator = (expr: Expression<ts.Expression>): boolean => {
     const arrowFunc = expr.asKindOrThrow(SyntaxKind.ArrowFunction);
     const bodyText = arrowFunc.getBody().getText();

@@ -1,5 +1,4 @@
 import { controlWait } from "../../../../lib/controls";
-//import { needsAwait } from "./decorator";
 /**
  * @abstract
  * @needsAwait
@@ -7,8 +6,7 @@ import { controlWait } from "../../../../lib/controls";
 export class EntityControl {
 
     /**
-     * あいうえお<br>
-     * needsAwait
+     * あいうえお
      * @param seconds
      * @needsAwait 
      */
