@@ -14,20 +14,18 @@ sprite.addImage(Cat);
 sprite.position.x = window.innerWidth/2;
 sprite.position.y = window.innerHeight/2;
 
-sprite.Control.wait(0.1);
+sprite.Control.wait(1);
 
 
-let muki = 1;
+let muki = -1;
 const speed = 5;
-sprite.Thread.func = function (this:Sprite){
-    this.degree = 0;
-    this.Control.wait(1);
-    // ずっと繰り返す
-    for(;;){
-        this.degree += speed * muki;
-    }
+const test = function() {
+    return true;
 }
-const test3 = function (this:Sprite){
+console.log(test());
+if(muki == -1) {
+const test = function(this:Sprite) {
+    this.degree = 20;
     // ずっと繰り返す
     for(;;){
 
@@ -37,11 +35,36 @@ const test3 = function (this:Sprite){
         if(this.degree == 90){
             break;
         }
-        this.Control.wait(3);
+        this.Control.wait(2);
         muki *= -1;
 
     }
 }
-sprite.Thread.func = test3;
+sprite.Thread.func = test;
+
+}
+
+sprite.Thread.func = function (this:Sprite){
+    this.degree = 10;
+    this.Control.wait(3);
+    // ずっと繰り返す
+    for(;;){
+        this.degree += speed * muki;
+        this.position.x += 1 * positionFlg;
+    }
+}
+let positionFlg = -1;
+const start = function(this:Sprite) {
+
+    this.Thread.func = () => {
+        for(;;){
+            this.Control.wait(1);
+            positionFlg *= -1;
+        }
+    }
+
+}
+start.bind(sprite)();
+
 
 Engine.run();

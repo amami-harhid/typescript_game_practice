@@ -5,7 +5,7 @@ import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import { glob } from 'glob'
 import checker from 'vite-plugin-checker';
-import { vitePluginAutoAwait } from './vitePlugins/replacer/index.ts';
+import { vitePluginAutoAwait } from './vitePlugins/replacer2/index.ts';
 import babel from "@rolldown/plugin-babel"
 
 // ルートとするディレクトリー

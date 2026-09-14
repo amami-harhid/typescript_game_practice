@@ -1,69 +1,101 @@
 import * as ts from 'typescript';
-
 import awaitTargetsJson from './awaitTargets.json' with { type: 'json' };
-export const getAwaitTargets = (): string[] => {
-    const list:string[] = [];
-    for(const item of awaitTargetsJson.targets) {
-        list.push( item.name );
-    }
-    return list;
+import { LOOP_YIELD_SKIP_COMMENT } from './loopYieldSkipMark.ts';
+import { minimatch } from 'minimatch';
+import yieldExcludesJson from './yieldExcludes.json' with { type: 'json' };
+
+export function isTargetId(id: string): boolean {
+    if (!id.endsWith('.ts') && !id.endsWith('.tsx') || id.includes('node_modules')) 
+        return false;
+    if (!id.includes('testV2') || id.includes('/lib/')) 
+        return false
+    return true;
 }
 
-export const isAwaitAddTransformerVist = function(node: ts.Node, typeChecker: ts.TypeChecker|null, targetList:string[]): boolean {
-    if(!typeChecker) return false;
-    const _node = node as ts.CallExpression;
-    let targetExpression = _node.expression;
-    if (ts.isPropertyAccessExpression(_node.expression)) {
-        const _name = _node.expression.name.getText();
-        if( targetList.includes( _name )) {
-            let symbol = typeChecker.getSymbolAtLocation(targetExpression);	
-            //console.log('symbol=', symbol);
-            if (symbol) {
-                // エイリアス（インポート）の解決
-                let declarationSymbol = symbol;
-                if ((symbol.flags & ts.SymbolFlags.Alias) !== 0) {
-                    try {
-                        declarationSymbol = typeChecker.getAliasedSymbol(symbol);
-                    } catch (e) {}
-                }
-                                        
-                const declarations = declarationSymbol.getDeclarations();
-                if (declarations && declarations.length > 0) {
-                    let definitionNode = declarations[0] as ts.Node;
-                                        
-                    // MethodDeclaration まで遡る
-                    while (definitionNode && !ts.isMethodDeclaration(definitionNode) && definitionNode.parent) {
-                        definitionNode = definitionNode.parent;
-                    }
-                    if (ts.isMethodDeclaration(definitionNode)) {
-                        const defSourceFile = definitionNode.getSourceFile();
-                        const defSourceText = defSourceFile.getFullText();
-                        const fullStart = definitionNode.getFullStart();
-                        const nodeStart = definitionNode.getStart(defSourceFile);
-                                        
-                        // クラスのメソッド定義の直前コメントを切り出す
-                        const leadingText = defSourceText.slice(fullStart, nodeStart);
-                        //console.log('leadingText=',leadingText)
-                        if (leadingText.includes('@needsAwait')) {
-                            // すでに await がついていなければ付与
-                            if (node.parent && !ts.isAwaitExpression(node.parent)) {
-                                console.log('await ++++')
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
+/**
+ * yield付与の非対象のファイルパスかを判定する
+ * @param {string} filePath - チェック対象のファイルパス
+ * @returns {boolean} 非対象であれば true、そうでなければ false
+ */
+export function isYieldExcluded(filePath: string): boolean {
+    // 「～～/lib/...」のように前方に任意の文字を許容したい場合は、
+    // パターンの先頭に `**` があるとします。
+    const isEcclude = yieldExcludesJson.exclude.some(pattern=>{
+        return minimatch(filePath, pattern);
+    });
+    // 対象外にヒットしたときは true を返す
+    return isEcclude;
+} 
+
+export function hasSkipComment(node: ts.Node, sourceFile: ts.SourceFile): boolean {
+    const leadingComments = ts.getLeadingCommentRanges(sourceFile.text, node.pos);
+    if (!leadingComments) return false;
+
+    for (const commentRange of leadingComments) {
+        const commentText = sourceFile.text.substring(commentRange.pos, commentRange.end);
+        if (commentText.includes( LOOP_YIELD_SKIP_COMMENT )) {
+            return true;
         }
     }
     return false;
 }
+export function isTargetEventAssignment(node: ts.Node): boolean {
 
+    // Setter "=" でないとき
+    if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) {
+        return false;
+    }
+
+    // 左側 が "func"でないとき
+    const left = node.left;
+    if (!ts.isPropertyAccessExpression(left) || left.name.text !== 'func') {
+        return false;
+    }
+
+    let expr = left.expression;
+    if (ts.isCallExpression(expr)) {
+        expr = expr.expression;
+    }
+
+    if (ts.isPropertyAccessExpression(expr)) {
+        //const parentExpr = expr.expression;
+        if (ts.isPropertyAccessExpression(expr)) {
+            const categoryName = expr.name.text;
+            if (categoryName === 'Thread') {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+
+export const getAwaitTargets = (): [string[], string[] ] => {
+    const list:string[] = [];
+    const listFull:string[] = [];
+    for(const item of awaitTargetsJson.targets) {
+        list.push( item.name );
+        listFull.push( item.fullName );
+    }
+    return [list, listFull];
+}
+
+const [_, awaitTargetFullMethods] = getAwaitTargets();
+
+/**
+ * Async Generator関数にする
+ * @param rightExpr 
+ * @param visit 
+ * @param inLoop 
+ * @returns 
+ */
 const convertToAsyncGenerator = function (
     rightExpr: ts.FunctionExpression, 
     visit: (n: ts.Node, inLoop?: boolean) => ts.Node, 
     inLoop: boolean
 ): ts.FunctionExpression {
+    
     const hasAsync = rightExpr.modifiers?.some(m => m.kind === ts.SyntaxKind.AsyncKeyword);
     let newModifiers = rightExpr.modifiers || ts.factory.createNodeArray([]);
   
@@ -97,7 +129,7 @@ interface PluginError extends Error {
 }
 
 /** 変数定義されたメソッドを async function*() 化する */ 
-export const changeAsyncFunction = (node: ts.Node, visit:Visit, inLoop:boolean) : [boolean, ts.Node] => {
+const changeAsyncFunction = (node: ts.Node, visit:Visit, inLoop:boolean) : [boolean, ts.Node] => {
     const _node = node as ts.VariableDeclaration;
     if(_node.initializer && ts.isFunctionExpression(_node.initializer)){
         const updatedFunction = convertToAsyncGenerator(_node.initializer, visit, inLoop);
@@ -115,7 +147,7 @@ export const changeAsyncFunction = (node: ts.Node, visit:Visit, inLoop:boolean) 
     return [false, node];
 }
 /** 直接のイベント代入の検知と変換 */
-export const directAsyncFunction = (node: ts.Node, visit:Visit, inLoop:boolean): [boolean, ts.Node] => {
+const directAsyncFunction = (node: ts.Node, visit:Visit, inLoop:boolean): [boolean, ts.Node] => {
 
     const binaryExpr = node as unknown as  ts.BinaryExpression;
     const rightExpr = binaryExpr.right;
@@ -149,15 +181,12 @@ const createYieldStatement = (): ts.ExpressionStatement => {
 const transformLoopBody = (
         node: ts.Statement, 
         visit: (n: ts.Node, inLoop?: boolean) => ts.Node, 
-        id: string,
-        codeGenerater: (node:ts.Node) => string,
-        magikstringOverwrite: (node:ts.Node, newNode:ts.Node)=>void,
+        id: string
     ): ts.Statement => {
-    console.log('=======transformLoopBody=========');
+
     const sourceFile = node.getSourceFile();
 
     if (ts.isBlock(node)) {
-        console.log('=======transformLoopBody is.isBlock =========');
         if (node.statements.length === 0) {
             // 空のブロック `{}` のエラー位置を取得
             const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
@@ -175,14 +204,22 @@ const transformLoopBody = (
 
         const newStatements: ts.Statement[] = [];
         for (const stmt of node.statements) {
-            // 元の行を取り込む
-            const visitNode = ts.visitNode(stmt, visit) as ts.Statement;
-            newStatements.push(visitNode);
+            // if (isTarget(stmt)) {
+            //     const yieldStatement = createYieldStatement();
+            //     newStatements.push(yieldStatement);
+            // }
+            newStatements.push(ts.visitNode(stmt, visit) as ts.Statement);
         }
 
         const yieldStmt = createYieldStatement();
 
         const lastStmt = node.statements[node.statements.length - 1];
+        let isExitsyield = false;
+        const lastStatementExpression = (lastStmt as ts.ExpressionStatement).expression;
+        if(ts.isYieldExpression(lastStatementExpression)) {
+            console.log('Last statement is yield')
+            isExitsyield = true;
+        } 
         const trailingCommentsOfLastStmt = ts.getTrailingCommentRanges(sourceFile.text, lastStmt.end);
     
         const scanStartPos = (trailingCommentsOfLastStmt && trailingCommentsOfLastStmt.length > 0)
@@ -209,18 +246,10 @@ const transformLoopBody = (
                 );
             }
         }
-
-        newStatements.push(yieldStmt);
-        const updateBlock = ts.factory.updateBlock(node, newStatements);
-        for(const stmt of updateBlock.statements){
-            console.log('stmt=', codeGenerater(stmt));
-            if(!(ts.isExpressionStatement(stmt) && ts.isYieldExpression(stmt.expression))){
-                console.log('stmt=', codeGenerater(stmt));
-                magikstringOverwrite(stmt, stmt);
-
-            }
+        if(isExitsyield === false){
+            newStatements.push(yieldStmt);
         }
-        return updateBlock;
+        return ts.factory.updateBlock(node, newStatements);
     }
 
     if (ts.isEmptyStatement(node)) {
@@ -250,39 +279,39 @@ const transformLoopBody = (
     return ts.factory.createBlock(newStatements, true);
 }
 /** LOOP の置換 */
-export const loopChange = (id: string, node: ts.Node, visit:Visit, inLoop:boolean, codeGenerater: (node:ts.Node) => string, magikstringOverwrite: (node:ts.Node, newNode:ts.Node)=>void): [boolean, ts.Node] => {
+export const loopChange = (id: string, node: ts.Node, visit:Visit, inLoop:boolean): [boolean, ts.Node] => {
     
     if (ts.isForStatement(node)) {
         const _node = node as ts.ForStatement
-        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id, codeGenerater, magikstringOverwrite);
+        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
         const forStatement = ts.factory.updateForStatement(node, _node.initializer, _node.condition, _node.incrementor, updatedBody);
         //ts.setTextRange(forStatement, node);
         //isModified = true;
         return [true,forStatement];
     }else if (ts.isForInStatement(node)) {
         const _node = node as ts.ForInStatement
-        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id, codeGenerater, magikstringOverwrite);
+        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
         const forInStatemnet = ts.factory.updateForInStatement(node, _node.initializer, _node.expression, updatedBody);
         //ts.setTextRange(forInStatemnet, node);
         //isModified = true;
         return [true, forInStatemnet];
     }else if (ts.isForOfStatement(node)) {
         const _node = node as ts.ForOfStatement;
-        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id, codeGenerater, magikstringOverwrite);
+        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
         const forOfStatement = ts.factory.updateForOfStatement(node, _node.awaitModifier, _node.initializer, _node.expression, updatedBody);
         //ts.setTextRange(forOfStatement, node);
         //isModified = true;
         return [true, forOfStatement];
     }else if (ts.isWhileStatement(node)) {
         const _node = node as ts.WhileStatement;
-        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id, codeGenerater, magikstringOverwrite);
+        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
         const whileStatement = ts.factory.updateWhileStatement(node, _node.expression, updatedBody);
         //ts.setTextRange(whileStatement, node);
         //isModified = true;
         return [true, whileStatement];
     }else if (ts.isDoStatement(node)) {
         const _node = node as ts.DoStatement;
-        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id, codeGenerater, magikstringOverwrite);
+        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
         const doStatement = ts.factory.updateDoStatement(node, updatedBody, _node.expression);
         //ts.setTextRange(doStatement, node);
         //isModified = true;
@@ -291,61 +320,36 @@ export const loopChange = (id: string, node: ts.Node, visit:Visit, inLoop:boolea
     return [false, node];
 }
 
-export const transformIfBody = ( node: ts.Statement, visit: Visit, magikstringOverwrite: (node:ts.Node, newNode:ts.Node)=>void): [boolean, ts.Statement] => {
+export const transformIfBody = ( node: ts.Statement, visit: Visit): [boolean, ts.Statement] => {
     if (ts.isBlock(node)) {
         const newStatements: ts.Statement[] = [];
         let updateFlg = false;
+        let prevStatement: ts.Statement | null = null;
         for (const stmt of node.statements) {
             if (isTarget(stmt)) {
-                newStatements.push(createYieldStatement());
+                // statement が break, continueのとき 
+                if(prevStatement){
+                    const prev = prevStatement as ts.ExpressionStatement;
+                    if(!ts.isYieldExpression(prev.expression)) {
+                        // 直前が yield でないとき
+                        newStatements.push(createYieldStatement());
+                    }
+                }else{
+                    // 直前がないとき
+                    newStatements.push(createYieldStatement());
+                }
                 updateFlg = true;
             }
-            magikstringOverwrite(stmt, stmt);
             newStatements.push(ts.visitNode(stmt, visit) as ts.Statement);
+            prevStatement = stmt;
         }
         if(updateFlg){
             return [true, ts.factory.updateBlock(node, newStatements)];
         }
     } else {
-        // IF/ELSEのブロックがないとき
         if (isTarget(node)) {
-            const block = ts.factory.createBlock([createYieldStatement(), ts.visitNode(node, visit) as ts.Statement], true);
-            
-            return [true, block];
+            return [true, ts.factory.createBlock([createYieldStatement(), ts.visitNode(node, visit) as ts.Statement], true)];
         }
     }
-    magikstringOverwrite(node, node);
     return [false, node];
-}
-
-
-export function isTargetEventAssignment(node: ts.Node): boolean {
-
-    // Setter "=" でないとき
-    if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) {
-        return false;
-    }
-
-    // 左側 が "func"でないとき
-    const left = node.left;
-    if (!ts.isPropertyAccessExpression(left) || left.name.text !== 'func') {
-        return false;
-    }
-
-    let expr = left.expression;
-    if (ts.isCallExpression(expr)) {
-        expr = expr.expression;
-    }
-
-    if (ts.isPropertyAccessExpression(expr)) {
-        //const parentExpr = expr.expression;
-        if (ts.isPropertyAccessExpression(expr)) {
-            const categoryName = expr.name.text;
-            if (categoryName === 'Thread') {
-                return true;
-            }
-        }
-    }
-
-    return false;
 }
