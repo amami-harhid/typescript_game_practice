@@ -5,11 +5,10 @@ import remapping from '@ampproject/remapping';
 
 import * as helper from './helper.ts';
 import * as helperMS from './helperMS.ts';
-import * as helperAG from './helperAsyncGenerator.ts'
-import { CodeBlockWriter } from 'ts-morph';
 
 export function vitePluginAutoAwait(): Plugin {
 	let program: ts.Program | null = null;
+	const targetVariableNames = new Set<string>();
 	const inMemoryCache = new Map<string, string>();
 	let compilerOptions: ts.CompilerOptions = {};
 	let configFileNames: string[] = [];
@@ -48,15 +47,18 @@ export function vitePluginAutoAwait(): Plugin {
     	  	program = ts.createProgram(configParseResult.fileNames, compilerOptions);
     	},
 		buildEnd() {
+			//targetVariableNames.clear();
 			inMemoryCache.clear();
 			program = null;
 		},
 	    transform(code, id) {
     		// node_modules やに対象外のファイルはスルー
-			if( helper.isTargetIdExcluded(id)) {
-				return null;
-			}
+    		if (!id.endsWith('.ts') && !id.endsWith('.tsx') || id.includes('node_modules')) return null;
+    		if (!id.includes('testV2')) return null; // testV2 のときだけ実行する
     		if (!program) return null;
+			//const typeChecker = program.getTypeChecker();
+
+
 
 			// HMR（ファイルの書き換え）対応：必要に応じてプログラムを再作成
 			const normalizedId = path.normalize(id).replace(/\\/g, '/');
@@ -90,10 +92,41 @@ export function vitePluginAutoAwait(): Plugin {
 			const currentSourceFile = program.getSourceFile(normalizedId);
 			if (!currentSourceFile) return null;
 
-			const loopYieldTransformer = (context: ts.TransformationContext) => {
+			// 変数スキャン格納セットを初期化
+			targetVariableNames.clear();
+			
+			const mainTransformer = (context: ts.TransformationContext) => {
     	    	return (rootNode: ts.SourceFile) => {
-
-					function visit(node: ts.Node, inLoop = false): ts.Node {
+					/** 変数スキャン */
+					function preScan(node: ts.Node): void {						
+						if (helper.isTargetEventAssignment(node)) {
+							const binaryExpr = node as ts.BinaryExpression;
+							if (ts.isIdentifier(binaryExpr.right)) {
+								targetVariableNames.add(binaryExpr.right.text);
+							}
+						}
+						ts.forEachChild(node, preScan);
+					}
+					// 宣言された変数をスキャンする
+					preScan(rootNode);
+        	  		function visit(node: ts.Node, inLoop = false): ts.Node {
+						// 変数定義されたメソッドを async function*() 化する
+						if (ts.isVariableDeclaration(node) && node.initializer && ts.isFunctionExpression(node.initializer)) {
+							//console.log('targetVariableNames=', targetVariableNames);
+							if (ts.isIdentifier(node.name) && targetVariableNames.has(node.name.text)) {
+								const [change, variableNode] = helper.changeAsyncFunction(node, visit, inLoop);
+    	    	            	if(change){
+									return variableNode;
+								}
+    	            		}
+        	      		}
+						// 直接のイベント代入の検知と変換
+            			if (helper.isTargetEventAssignment(node)) {
+							const [change, updateBinaryExpression] = helper.directAsyncFunction(node, visit, inLoop);
+							if(change){
+								return updateBinaryExpression;
+							}
+    	        		}
 						// 繰り返し構文の検知と書き換え
 	            		if (
     	            		ts.isForStatement(node) ||
@@ -139,17 +172,13 @@ export function vitePluginAutoAwait(): Plugin {
 			};
 
 			// ステップ１
-			// async generator化
-			const asyncGeneratorTransformResult = helperAG.transformAGObject(code,id);
-
-			// ステップ２
 			// await 追加( + 必要に応じて親メソッド定義を async にする)
 			// (magicStringを使う)
-			const awaitTransformResult = helperMS.transformObject(asyncGeneratorTransformResult.code, id);
-			// ステップ３
+			const transformObjectResult = helperMS.transformObject(code, id);
+			// ステップ２
 			// 繰り返しループの中に yieldをつける ( + 必要に応じて親メソッドを Generator関数にする )
 			// Typescriptの公式変換( 型情報は消えて、Javascript になる )
-			const loopYieldTranspileResult = ts.transpileModule(awaitTransformResult.code, {
+			const transpileResult = ts.transpileModule(transformObjectResult.code, {
 				compilerOptions: compilerOptions,
 				fileName: id,
 				transformers: {
@@ -158,26 +187,36 @@ export function vitePluginAutoAwait(): Plugin {
 					// 自作の変換処理（トランスフォーマー）
 					// を実行させる
                 	before: [
-                        (context) => loopYieldTransformer(context)
+                        (context) => mainTransformer(context)
                     ]
                 }
 			});
-			const finalCode = loopYieldTranspileResult.outputText;
-			const map1 = asyncGeneratorTransformResult.map;
-			const map2 = awaitTransformResult.map;
-			// TypeScriptが生成したマップをオブジェクトに変換
-			const map3Text = loopYieldTranspileResult.sourceMapText;
-			const map3 = (map3Text)? JSON.parse(map3Text): {};
-			const mergedMap = remapping(
-                        [map3, map2, map1],
+			const finalCode = transpileResult.outputText;
+			if (transpileResult.sourceMapText && transformObjectResult.map) {
+				// MagicStringが生成したマップ
+				const map1 = transformObjectResult.map;
+//				console.log('map1.sources=', map1.sources);
+				//map1.sources = [targetFileName];
+				// TypeScriptが生成したマップをオブジェクトに変換
+				const map2 = JSON.parse(transpileResult.sourceMapText);
+//				console.log('map2.sources=', map2.sources);
+
+				// 2つを結合（最新のmap2から、過去のmap1へと遡るツリーを作る)
+				//map1.sources[0] = map2.sources[0]; // sourcesの中身を一致させることで 元コードをF12(source)に出現させる
+				const mergedMap = remapping(
+                        [map2, map1],
                         () => null
                     );
-			// 元コードを格納: F12 sourceで元コードを表示するため
-			mergedMap.sourcesContent = [code]; 
-			return {
-				code: finalCode, 
-				map: mergedMap as any,
+				mergedMap.sourcesContent = [code]; 
+				return {
+					code: finalCode, 
+					map: mergedMap,
+				}
 			}
+      		return {
+        		code: finalCode,
+        		map: transformObjectResult.map? transformObjectResult.map: null,
+      		};		
 		}
 	}
 }

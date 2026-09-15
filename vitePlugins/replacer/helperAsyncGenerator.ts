@@ -12,10 +12,10 @@
  * ありますが、それも上記の例のように replaceWithText で簡単に対応可能です。
  */
 import * as ts from 'typescript';
-import { Expression, JSDocTagInfo, Project, PropertyAccessExpression, Symbol, SyntaxKind } from 'ts-morph';
+import { Expression, Project, SyntaxKind } from 'ts-morph';
 import MagicString from 'magic-string';
 import path from 'path';
-
+import * as helper from './helper.ts';
 
 // パフォーマンス向上のため、Projectインスタンスはファイル間で使い回す（シングルトン）
 let project: Project | null = null;
@@ -108,11 +108,11 @@ const arrowToAsyncGenerator = (expr: Expression<ts.Expression>): boolean => {
  * @param id 
  * @returns 
  */
-export function transformAGObject(code: string, id: string ): { code: string; map: any } {
+export function transformAGObject(code: string, id: string, program: ts.Program ): { code: string; map: any } {
     // if ( !isTargetId(id)) {
     //     return {code: code, map: null}
     // }
-    console.log('transformAGObject id=', path.basename(id));
+    console.log('transformAGObject id=', id);
     const magicString = new MagicString(code)
     const currentProject = getOrInitProject(process.cwd());
     const sourceFile = currentProject.createSourceFile(id, code, { overwrite: true });
@@ -137,9 +137,19 @@ export function transformAGObject(code: string, id: string ): { code: string; ma
                         const rightIdentifier = right.asKindOrThrow(SyntaxKind.Identifier);
                         // ts-morphの機能：変数の「定義元（宣言）」を直接取得する
                         const definitions = rightIdentifier.getDefinitions();
+                        //console.log('-------- definitions=', definitions)
                         for (const def of definitions) {
                             const declarationNode = def.getDeclarationNode();
+                            console.log('def=', (declarationNode)? declarationNode.getText(): 'undefined');
                             if (!declarationNode) continue;
+                            const targetFile = declarationNode.getSourceFile();
+                            let isSameSourceFile = true;
+                            if(targetFile != sourceFile) {
+                                // 宣言が別ファイルのとき
+                                isSameSourceFile = false;
+                                console.log('===== 別ファイルに定義がある')
+                            }
+                            // 宣言が別ファイルでないとき
                             // 変数宣言（const XXX = ...）であるか確認
                             if (declarationNode.getKind() === SyntaxKind.VariableDeclaration) {
                                 const variableDeclarator = declarationNode.asKindOrThrow(SyntaxKind.VariableDeclaration);
@@ -147,7 +157,21 @@ export function transformAGObject(code: string, id: string ): { code: string; ma
                                 if(initializer){
                                     // 通常の関数式 (function() {}) の場合
                                     if (initializer.getKind() === SyntaxKind.FunctionExpression) {
-                                        hasChanged = funcToAsyncGenerator(initializer);
+                                        if(!isSameSourceFile){
+                                            const func = initializer.asKindOrThrow(SyntaxKind.FunctionExpression);
+                                            const bodyText = func.getBody().getText();
+                                            const paramsText = func.getParameters().map(p => p.getText()).join(', ');
+                                            func.replaceWithText(`async function* (${paramsText}) ${bodyText}`);
+                                            //targetFile.saveSync();
+                                            const replacedId = targetFile.getFilePath()
+                                            const replacedCode = targetFile.getText();
+                                            console.log('====== replacedId=', replacedId);
+                                            console.log('====== replacedCode=', replacedCode)
+                                            helper.MemoryCache.set(replacedId, replacedCode, true);
+                                            targetFile.forget(); // 読み込み直し
+                                        }else{
+                                            hasChanged = funcToAsyncGenerator(initializer);
+                                        }
                                     }
                                     // もしアロー関数 (async () => {}) だった場合の考慮
                                     // （アロー関数は generator になれないため、通常の関数式へ変換が必要）
@@ -181,14 +205,6 @@ export function transformAGObject(code: string, id: string ): { code: string; ma
         }
     };
 
-    if (!hasChanged) {
-        // メモリ解放のためにソースファイルを削除
-        currentProject.removeSourceFile(sourceFile);
-        return {
-            code : code,
-            map: null,
-        };
-    }
     // magic-string を使って、安全に一括置換を行う
     //console.log('replacements=', replacements);
     for (const r of replacements) {
@@ -202,6 +218,15 @@ export function transformAGObject(code: string, id: string ): { code: string; ma
             includeContent: true,
         }
     )
+
+    if (!hasChanged) {
+        // メモリ解放のためにソースファイルを削除
+        currentProject.removeSourceFile(sourceFile);
+        return {
+            code : code,
+            map: map,
+        };
+    }
     // // 変更後のコードとソースマップを取得
     // const resultCode = sourceFile.getFullText();
 
@@ -231,112 +256,3 @@ export function transformAGObject(code: string, id: string ): { code: string; ma
     }
 }
 
-
-export function transformAGObject2(code: string, id: string ): { code: string; map: any } {
-    if (!id.endsWith('.ts') && !id.endsWith('.tsx') || id.includes('node_modules')) return {code: code, map: null};;
-    if (!id.includes('testV2') || id.includes('/lib/')) return {code: code, map: null}; // testV2 のときだけ実行する
-    console.log('transformAGObject id=', path.basename(id));
-    const magicString = new MagicString(code)
-    const currentProject = getOrInitProject(process.cwd());
-    const sourceFile = currentProject.createSourceFile(id, code, { overwrite: true });
-    let hasChanged = false;
-
-    replacements.splice(0, replacements.length); // 配列要素をゼロ個にする
-
-    // 代入式（PropertyAccessExpression = Identifier）を走査
-    const assignments = sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression);
-    for(const assignment of assignments){
-        console.log('assignment=', assignment.getText())
-        // `=` 演算子であることを確認
-        if (assignment.getOperatorToken().getKind() == SyntaxKind.EqualsToken) {
-            console.log('assignment =', assignment.getText());
-            const left = assignment.getLeft();
-            const right = assignment.getRight();
-            // 左辺が `xxx.Thread.func` のようなプロパティアクセスか確認
-            if (left.getKind() === SyntaxKind.PropertyAccessExpression) {
-                const leftText = left.getText();
-                // 特定のパターン（末尾が .Thread.func）にマッチするか確認
-                if (leftText.endsWith('.Thread.func')) {
-
-
-
-
-
-                    // 右辺が識別子（関数）であるか確認
-                    if (right.getKind() === SyntaxKind.FunctionExpression) {
-                        //const funcExpr = right.asKindOrThrow(SyntaxKind.FunctionExpression);
-                        hasChanged = funcToAsyncGenerator(right);
-                    } else if (right.getKind() === SyntaxKind.ArrowFunction) {
-                        const arrowFunc = right.asKindOrThrow(SyntaxKind.ArrowFunction);
-                        const bodyText = arrowFunc.getBody().getText();
-                        const paramsText = arrowFunc.getParameters().map(p => p.getText()).join(', ');
-                        // アロー関数を async function* () {} の文字列に置き換える
-                        arrowFunc.replaceWithText(`async function* (${paramsText}) ${bodyText}`);
-                        hasChanged = true;
-
-                    }
-
-                }
-            }
-
-
-        }
-    };
-
-    if (!hasChanged) {
-        // メモリ解放のためにソースファイルを削除
-        currentProject.removeSourceFile(sourceFile);
-        return {
-            code : code,
-            map: null,
-        };
-    }
-    // 変更がない場合は何もしない
-    if (replacements.length === 0) return {
-            code : code,
-            map: null,
-        };;
-
-    // magic-string を使って、安全に一括置換を行う
-    console.log('replacements=', replacements);
-    for (const r of replacements) {
-        magicString.overwrite(r.start, r.end, r.text);
-    }
-    const finalCode = magicString.toString();
-    const map = magicString.generateMap(
-        { 
-            hires: true, 
-            source: path.basename(id),
-            includeContent: true,
-        }
-    )
-    // // 変更後のコードとソースマップを取得
-    // const resultCode = sourceFile.getFullText();
-
-    // // ソースマップを生成
-    // const sourceMap = sourceFile.getPreEmitDiagnostics().length === 0
-    //     ? sourceFile.getEmitOutput().getOutputFiles()[0]?.getText() 
-    //     : undefined;
-
-    // メモリ解放のためにソースファイルを削除
-    currentProject.removeSourceFile(sourceFile);
-
-    // 【★Ａ】
-    // map 結合時に sourcesを一致させてマップパイプラインを
-    // つなげるようにするための考慮である
-    // const baseId = path.basename(id);
-    // if(sourceMap) {
-    //     const map = JSON.parse(sourceMap);
-    //     map.file = baseId;
-    //     console.log('sourceMap=', sourceMap)
-    //     return {
-    //         code : resultCode, 
-    //         map: map as any,
-    //     };
-    // }
-
-    return {
-        code: finalCode,
-        map: map,
-    }
-}

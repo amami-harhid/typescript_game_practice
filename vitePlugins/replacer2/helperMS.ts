@@ -40,11 +40,6 @@ function getOrInitProject(rootPath: string): Project {
  * @returns 
  */
 export function transformObject(code: string, id: string ): { code: string; map: any } {
-
-    // if ( !isTargetId(id)) {
-    //     return {code: code, map: null}
-    // }
-    
     const magicString = new MagicString(code)
     const currentProject = getOrInitProject(process.cwd());
     const sourceFile = currentProject.createSourceFile(id, code, { overwrite: true });
@@ -94,9 +89,7 @@ export function transformObject(code: string, id: string ): { code: string; map:
                             const tagName = tag.getName(); // this.Control.wait(10) ==> wait のJSDOCにある タグ @～
                             //console.log('tagName=', tagName);
                             if( tagName == 'needsAwait') {
-                                //console.log('==== needsAwaot [1] ====')
                                 const start = callExpr.getStart();
-                                //console.log('==== needsAwaot [2] ====')
                                 //const end = callExpr.getEnd();
                                 //console.log('magicstring appendLeft ', `await ${text}`);
                                 // 左側に("await ")を追加する

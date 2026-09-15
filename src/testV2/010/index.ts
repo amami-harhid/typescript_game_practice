@@ -1,82 +1,68 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-// 1. メタデータを一時的に格納するコンテナ
-const registry: { className: string, methods: string[] }[] = [];
-// クラスごとに一時的にメソッド名を溜めるバッファ
-let currentClassMethods: string[] = [];
+/**
+ * スプライトに複数の画像を登録
+ * costumeインスタンスを生成し、costumeに対して画像を登録する
+ * そして表示する画像を切り替えるメソッドを用意する ( constume.next() )
+ */
 
-// 2. メソッドデコレータ @Fuga の定義
-function Fuga<This, Args extends any[], Return>(
-	originalMethod: (...args: Args) => Promise<Return>,
-	context: ClassMethodDecoratorContext<This, (...args: Args) => Promise<Return> | Return>
-) {
-	// 検出したメソッド名をバッファに追加
-	const methodName = String(context.name);
-	currentClassMethods.push(methodName);
-	return originalMethod;
+import { Sprite } from './lib/sprite';
+import { Engine } from './lib/engine';
+import Cat from '../../../assets/cat.svg';
+import { test2 } from './sub/threads';
+
+const sprite = new Sprite();
+sprite.addImage(Cat);
+
+sprite.position.x = window.innerWidth/2;
+sprite.position.y = window.innerHeight/2;
+
+sprite.Control.wait(1);
+
+
+let muki = -1;
+const speed = 5;
+const test = function() {
+    return true;
 }
+console.log(test());
+if(muki == -1) {
+const test = async function* (this:Sprite) {
+    this.degree = 20;
+    // ずっと繰り返す
+    for(;;){
 
-// 3. クラスデコレータ @Hoge の定義
-function Hoge<Class extends abstract new (...args: any[]) => any>(
-  value: Class,
-  context: ClassDecoratorContext<Class>
-) {
-	const className = String(context.name);  
-	// @Fuga が付いたメソッドがあればレジストリに登録
-	if (currentClassMethods.length > 0) {
-    	registry.push({
-			className: className,
-			methods: currentClassMethods,
-		});
-	}
-	// 次のクラスのためにバッファをクリア
-	currentClassMethods = [];
-	return value;
-}
+        if(this.degree == 0){
+            continue;
+        }
+        if(this.degree == 90){
+            break;
+        }
+        this.Control.wait(2);
+        muki *= -1;
 
-// ==========================================
-// 4. デコレータの使用例
-// ==========================================
-
-@Hoge
-class UserService {
-  @Fuga
-  async getUser() {}
-
-  // @Fuga がないので無視される
-  async deleteUser() {}
-
-  @Fuga
-  async updateUser() {}
-}
-
-@Hoge
-class OrderService {
-  @Fuga
-  async createOrder() {}
-}
-
-// ==========================================
-// 5. 収集したメタデータを XML に変換・格納
-// ==========================================
-function generateXml(): string {
-  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<DecoratedElements>\n';
-  
-  for (const item of registry) {
-    xml += `  <Class name="${item.className}">\n`;
-    for (const method of item.methods) {
-      xml += `    <Method name="${method}" decorator="Fuga" />\n`;
     }
-    xml += `  </Class>\n`;
-  }
-  
-  xml += '</DecoratedElements>';
-  return xml;
+}
+sprite.Thread.func = test;
+
 }
 
-console.log(UserService);
-console.log(OrderService)
+sprite.Thread.func = function (this:Sprite){
+    this.degree = 15;
+    this.Control.wait(3);
+    // ずっと繰り返す
+    for(;;){
+        this.degree += speed * muki;
+        this.position.x += 1 * positionFlg;
+    }
+}
+let positionFlg = -1;
 
-// XMLの出力・格納
-const resultXml = generateXml();
+sprite.Thread.func = () => {
+    for(;;){
+        (this as unknown  as Sprite).Control.wait(0.5);
+        positionFlg *= -1;
+    }
+}
 
-console.log(resultXml);
+sprite.Thread.func = test2
+
+Engine.run();

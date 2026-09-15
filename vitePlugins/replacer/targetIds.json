@@ -1,6 +1,6 @@
 {
   "exclude": [
         "**/lib/**/*.ts",
-        "**/node_modules/**.ts"
+        "**/node_modules/**.*"
     ]
 }

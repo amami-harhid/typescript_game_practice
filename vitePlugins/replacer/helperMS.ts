@@ -40,6 +40,11 @@ function getOrInitProject(rootPath: string): Project {
  * @returns 
  */
 export function transformObject(code: string, id: string ): { code: string; map: any } {
+
+    // if ( !isTargetId(id)) {
+    //     return {code: code, map: null}
+    // }
+    
     const magicString = new MagicString(code)
     const currentProject = getOrInitProject(process.cwd());
     const sourceFile = currentProject.createSourceFile(id, code, { overwrite: true });
@@ -60,7 +65,19 @@ export function transformObject(code: string, id: string ): { code: string; map:
             // await があれば無視
             return;
         }
-        const text = callExpr.getText();
+
+        // 直親の関数定義を得る
+        const parentFunction = callExpr.getFirstAncestorByKind(SyntaxKind.FunctionExpression)
+                            || callExpr.getFirstAncestorByKind(SyntaxKind.FunctionDeclaration)
+                            || callExpr.getFirstAncestorByKind(SyntaxKind.MethodDeclaration)
+                            || callExpr.getFirstAncestorByKind(SyntaxKind.ArrowFunction);
+        //console.log('parentFunction=', parentFunction)
+        let isParentFunctionAsync = false;
+        if(parentFunction && parentFunction.isAsync()) {
+            isParentFunctionAsync = true;
+        }
+        //console.log('isParentFunctionAsync=', isParentFunctionAsync);
+        //const text = callExpr.getText();
         //console.log('[1]callExpr.getText()= ', text); // this.Control.wait(10) ==>  this.Control.wait(10)
         const expression = callExpr.getExpression(); // // 型 LeftHandSideExpression<ts.LeftHandSideExpression>
         if (expression.getKind() === SyntaxKind.PropertyAccessExpression) {
@@ -89,22 +106,25 @@ export function transformObject(code: string, id: string ): { code: string; map:
                             const tagName = tag.getName(); // this.Control.wait(10) ==> wait のJSDOCにある タグ @～
                             //console.log('tagName=', tagName);
                             if( tagName == 'needsAwait') {
+                                //console.log('==== needsAwaot [1] ====')
                                 const start = callExpr.getStart();
+                                //console.log('==== needsAwaot [2] ====')
                                 //const end = callExpr.getEnd();
                                 //console.log('magicstring appendLeft ', `await ${text}`);
                                 // 左側に("await ")を追加する
                                 magicString.appendLeft(start, 'await ');
 
-                                // 直親の関数定義を得る
-                                const parentFunction = callExpr.getFirstAncestorByKind(SyntaxKind.FunctionDeclaration)
-                                || callExpr.getFirstAncestorByKind(SyntaxKind.MethodDeclaration)
-                                || callExpr.getFirstAncestorByKind(SyntaxKind.ArrowFunction);
-                                // 直親の関数定義があり、それが「Async」でないとき
-                                if(parentFunction && !parentFunction.isAsync()) {
+                                // 直親の関数定義がAsync でないとき
+                                if(!isParentFunctionAsync && parentFunction){
+                                    const start = parentFunction.getStart();
+                                    magicString.appendLeft(start, 'async ');
+                                    console.log('change parent function to async')
                                     // (安全対策)setIsAsyncメソッドがあるかを確認
-                                    if('setIsAsync' in parentFunction) {
-                                        parentFunction.setIsAsync(true);
-                                    }
+                                //     if('setIsAsync' in parentFunction) {
+                                //         parentFunction.setIsAsync(true);
+                                //     }
+                                }else{
+                                    console.log('do not change parent function to async')
                                 }
                                 return true;
                             }
