@@ -39,14 +39,14 @@ function getOrInitProject(rootPath: string): Project {
  * @param id 
  * @returns 
  */
-export function transformObject(code: string, id: string ): { code: string; map: any } {
+export function transformObject(code: string, id: string, project: Project  ): { code: string; map: any } {
 
     // if ( !isTargetId(id)) {
     //     return {code: code, map: null}
     // }
     
     const magicString = new MagicString(code)
-    const currentProject = getOrInitProject(process.cwd());
+    const currentProject = project; //getOrInitProject(process.cwd());
     const sourceFile = currentProject.createSourceFile(id, code, { overwrite: true });
     const typeChecker = currentProject.getTypeChecker();
     // new Expression の探索
@@ -118,10 +118,13 @@ export function transformObject(code: string, id: string ): { code: string; map:
                                 if(!isParentFunctionAsync && parentFunction){
                                     const start = parentFunction.getStart();
                                     magicString.appendLeft(start, 'async ');
-                                    //console.log('change parent function to async')
-                                
-                                //}else{
-                                    //console.log('do not change parent function to async')
+                                    console.log('change parent function to async')
+                                    // (安全対策)setIsAsyncメソッドがあるかを確認
+                                //     if('setIsAsync' in parentFunction) {
+                                //         parentFunction.setIsAsync(true);
+                                //     }
+                                }else{
+                                    console.log('do not change parent function to async')
                                 }
                                 return true;
                             }

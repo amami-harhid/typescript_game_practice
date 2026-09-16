@@ -1,6 +1,7 @@
 {
   "exclude": [
-        "**/lib/**/*.ts",
-        "**/node_modules/**.*"
+        "**/lib/**",
+        "**/node_modules/**",
+        "virtual:*"
     ]
 }

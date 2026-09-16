@@ -8,7 +8,7 @@ export const test2 = function(this:Sprite) {
         if(this.degree == 0){
             continue;
         }
-        if(this.degree == 12){
+        if(this.degree == 150){
             break;
         }
         this.Control.wait(20);

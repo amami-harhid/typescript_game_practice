@@ -6,8 +6,14 @@ import remapping from '@ampproject/remapping';
 import * as helper from './helper.ts';
 import * as helperMS from './helperMS.ts';
 import * as helperAG from './helperAsyncGenerator.ts'
-import * as Cache from './memoryCache.ts';
-import * as Utils from './utils.ts';
+import { CodeBlockWriter, InMemoryFileSystemHost } from 'ts-morph';
+import * as fs from "fs"; // 実ファイル読み込み用
+import { Project } from 'ts-morph';
+import { CustomFileSystemHost } from './customFileSystem.ts';
+import * as Cache from './memoryCache.ts'
+
+// パスの正規化関数
+const normalizePath = (p: string) => path.normalize(p).replace(/\\/g, "/");
 
 export function vitePluginAutoAwait(): Plugin {
 	//let program: ts.Program | null = null;
@@ -20,49 +26,20 @@ export function vitePluginAutoAwait(): Plugin {
 		// メモリキャッシュに最新の修正コードがあればそれを返す仕組み
 		load(id) {
 			const normId = id.split('?')[0];
-			if(Cache.MemoryCache.has(normId)){
-				return Cache.MemoryCache.get(normId);
+			if(Cache.MemoryCache.has(id)){
+				return Cache.MemoryCache.get(id);
 			}
 			return null;
 		},
-		hotUpdate(ctx) {
-			// Viteは開発スピードを極限まで上げるために
-			//「変更されたファイルだけをピンポイントで処理する」という強力なキャッシュ機構を持っています。
-			// しかし「保存されていない他のファイル」を起因としたコード置換をしている場合、ホットリロード時に
-			// 他ファイルを処理しないため、他ファイル起因のコード置換が行われません。
-			// ここではその回避のために、Viteのモジュールグラフを探索することで、更新保存されたTSファイルを
-			// インポート(直接的・間接的)する親ファイルを探し出しています。
-			// 親ファイルのキャッシュ情報を破棄することで、必要な全てのコード置換を発生させています。
-			const fileName = ctx.file;
-			if(fileName.endsWith(".ts")){
-				//console.log('hotUpdate ==> full-reload')
-				Cache.MemoryCache.clear();
-				const { moduleGraph } = this.environment;
-				// 更新保存されたモジュール情報を取得
-				const threadMods = moduleGraph.getModulesByFile(ctx.file);
-				if (threadMods) {
-					const invalidated = new Set<any>();
-					// インポートしている親、そのまた親... を再帰的に探す関数
-					const invalidateImporters = (mod: any) => {
-						if (!mod || invalidated.has(mod)) return;
-						invalidated.add(mod);
-						// キャッシュを破棄
-						moduleGraph.invalidateModule(mod);
-						// このモジュールをインポートしている親たち（importers）に対して再帰処理
-						for (const parent of mod.importers) {
-							invalidateImporters(parent);
-						}
-					}
-					for (const mod of threadMods) {
-						invalidateImporters(mod);
-					}
-				}
-				// ホットリロード（full-reload)を実行
-				this.environment.hot.send({
-					type: 'full-reload'
-				})
-				return [];
-			}
+		handleHotUpdate(ctx){
+			// 保存されたファイルの絶対パスを正規化
+			// const fileName = ctx.file;
+			// if(helper.MemoryCache.has(fileName)){
+			// 	helper.MemoryCache.remove(fileName);
+			// }
+			Cache.MemoryCache.clear();
+			// 何も返さない（void）、または ctx.modules を返すと通常のHMRフローが継続します
+			return ctx.modules;
 		},
     	// 💡 プロジェクト起動時に tsconfig.json を読み込んで、型環境を完全に構築する
     	buildStart() {
@@ -101,45 +78,34 @@ export function vitePluginAutoAwait(): Plugin {
 			//program = null;
 		},
 	    transform(code, id) {
-			const [_id] = id.split('?');
+			const [cleanId] = id.split('?');
+			const normId = normalizePath(cleanId); // ← ここで定義しています
 
     		// node_modules やに対象外のファイルはスルー
-			if( helper.isTargetIdExcluded(_id)) {
+			if( helper.isTargetIdExcluded(cleanId)) {
 				//console.log('Id excluded = ', _id)
 				return null;
 			}
-    		//if (!program) return null;
+
+			// 2. ts-morph の公式インメモリファイルシステムを使用（型エラーを回避）
+      		//const memFS = new InMemoryFileSystemHost();
 
 			// HMR（ファイルの書き換え）対応：必要に応じてプログラムを再作成
-			const normalizedId = Utils.normalizePath(id);
-			// 【インメモリ】ファイル読み込みをインターセプトするカスタムホストを作成
-    		const defaultHost = ts.createCompilerHost(compilerOptions);
-			const customHost: ts.CompilerHost = {
-				...defaultHost,
-				// TypeScript がファイルを要求した時、メモリに最新の修正コードがあればそれをパースして返す
-				getSourceFile: (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
-        			if (Cache.MemoryCache.has(fileName)) {
-            			return ts.createSourceFile(
-            				fileName,
-            				Cache.MemoryCache.get(fileName), // 最新の保存コード
-            				languageVersion,
-            				true // setParentNodes: true
-            			);
-          			}
-        			return defaultHost.getSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
-        		},
-        		fileExists: (fileName) => {
-        			return Cache.MemoryCache.has(fileName) || defaultHost.fileExists(fileName);
-        		}
+			const normalizedId = path.normalize(id).replace(/\\/g, '/');
+			// 【インメモリ】Viteが検知した「エディタからの最新コード」をインメモリに即時上書き保存
+			if(id == 'D:/Scratch3/ts/typescript_game_practice/src/testV2/010/sub/threads.ts'){
+				console.log('==== In tranform helper.MemoryCache.set normalizedId=', normalizedId);
 			}
-			// 最新の変更状態を反映した状態で Program と TypeChecker をビルドする
-    		// これを挟まないと、何回保存しても初期状態のコードがトランスフォームされ続けます
-    		//program = ts.createProgram([...configFileNames, normalizedId], compilerOptions, customHost);
-			//if(!program) return null;
+			//helper.MemoryCache.set(id, code, false);
+			//inMemoryCache.set(normalizedId, code);
 
-			//const currentSourceFile = program.getSourceFile(normalizedId);
-			//if (!currentSourceFile) return null;
+			const customFileSystem = new CustomFileSystemHost(normId, code);
 
+			// 3. 型を満たしたカスタムオブジェクトを Project に渡す
+      		const project = new Project({
+        		tsConfigFilePath: path.resolve(process.cwd(), "tsconfig.json"),
+        		fileSystem: customFileSystem // これで型エラーが解消されます
+    		});
 			const loopYieldTransformer = (context: ts.TransformationContext) => {
     	    	return (rootNode: ts.SourceFile) => {
 
@@ -187,38 +153,59 @@ export function vitePluginAutoAwait(): Plugin {
 					return ts.visitNode(rootNode, visit) as ts.SourceFile;
 				}
 			};
+			
 			// ステップ１
 			// async generator化
-			const asyncGeneratorTransformResult = helperAG.transformAGObject(code,_id );
+			//console.log('===== STEP01')
+			//if(!program) return null;
+			const asyncGeneratorTransformResult = helperAG.transformAGObject(code,id, project);
+			if(id == 'D:/Scratch3/ts/typescript_game_practice/src/testV2/010/sub/threads.ts'){
+				console.log('==== code[1]=\n', asyncGeneratorTransformResult.code);
+			}
 			// ステップ２
 			// await 追加( + 必要に応じて親メソッド定義を async にする)
 			// (magicStringを使う)
-			const awaitTransformResult = helperMS.transformObject(asyncGeneratorTransformResult.code, _id);
+			//console.log('===== STEP02')
+			const awaitTransformResult = helperMS.transformObject(asyncGeneratorTransformResult.code, id, project);
+			if(id == 'D:/Scratch3/ts/typescript_game_practice/src/testV2/010/sub/threads.ts'){
+				console.log('==== code[2]=\n', awaitTransformResult.code);
+			}
 			// ステップ３
 			// 繰り返しループの中に yieldをつける ( + 必要に応じて親メソッドを Generator関数にする )
 			// Typescriptの公式変換( 型情報は消えて、Javascript になる )
+			//console.log('===== STEP03')
 			const loopYieldTranspileResult = ts.transpileModule(awaitTransformResult.code, {
 				compilerOptions: compilerOptions,
-				fileName: _id,
+				fileName: id,
 				transformers: {
 					// 【before】
 					// TypeScript 本来の構文変換の前に
-					// 自作の変換処理（トランスフォーマー）を実行させる
+					// 自作の変換処理（トランスフォーマー）
+					// を実行させる
                 	before: [
                         (context) => loopYieldTransformer(context)
                     ]
                 }
 			});
+			if(id == 'D:/Scratch3/ts/typescript_game_practice/src/testV2/010/sub/threads.ts'){
+				console.log('==== code[3]=\n', loopYieldTranspileResult.outputText);
+			}
+			//console.log('===== STEP04')
+			//console.log(id)
 			const finalCode = loopYieldTranspileResult.outputText;
 			const map1 = asyncGeneratorTransformResult.map;
+			//console.log('map1 = ', map1);
 			const map2 = awaitTransformResult.map;
+			//console.log('map2 = ', map2);
 			// TypeScriptが生成したマップをオブジェクトに変換
 			const map3Text = loopYieldTranspileResult.sourceMapText;
 			const map3 = (map3Text)? JSON.parse(map3Text): {};
+			//console.log('map3 = ', map3);
 			const mergedMap = remapping(
                         [map3, map2, map1],
                         () => null
                     );
+			//console.log('===== STEP05')
 			// 元コードを格納: F12 sourceで元コードを表示するため
 			mergedMap.sourcesContent = [code]; 
 			return {
@@ -227,4 +214,17 @@ export function vitePluginAutoAwait(): Plugin {
 			}
 		}
 	}
-} 
+}
+
+// FEATURES
+// 
+// (1) replacer/awaitTargets.json
+//  awaitをつけたい メソッド名を入れておく
+// (2) メソッドJSDOCにマーク
+//   JSDOCに @needsAwait　があるメソッドを必要条件とする
+// (3) async function* にする対象
+//   const loop01 = function() {  };
+//   xxx.Thread.func = loop01;
+//   スコープの考慮をしていない簡易解析版なので、使用時には注意すること
+//   
+ 

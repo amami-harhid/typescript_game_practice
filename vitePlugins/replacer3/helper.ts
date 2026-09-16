@@ -12,7 +12,9 @@ import targetIdsJson from './targetIds.json' with { type: 'json'};
  */
 export function isTargetIdExcluded(id: string): boolean {
     const isExclude = targetIdsJson.exclude.some(pattern=>{
-        return minimatch(id, pattern);
+        const match = minimatch(id, pattern);
+        console.log('=========isTargetIdExcluded id=', id, ', pattern=', pattern, ', match=', match);
+        return match;
     })
     return isExclude; // 1個でもヒットすればTrue
 }

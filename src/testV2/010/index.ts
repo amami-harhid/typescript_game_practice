@@ -19,7 +19,7 @@ sprite.Control.wait(1);
 
 
 let muki = -1;
-const speed = 5;
+const speed = 6;
 const test = function() {
     return true;
 }
