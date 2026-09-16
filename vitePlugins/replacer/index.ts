@@ -4,10 +4,10 @@ import * as path from 'path';
 import remapping from '@ampproject/remapping';
 
 import * as helper from './helper.ts';
-import * as helperMS from './helperMS.ts';
-import * as helperAG from './helperAsyncGenerator.ts'
+import * as helperAwait from './helperAwaitTransformer.ts';
+import * as helperAsyncGenerator from './helperAsyncGenerator.ts'
 import * as Cache from './memoryCache.ts';
-import * as Utils from './utils.ts';
+//import * as Utils from './utils.ts';
 import { loopYieldTransformer } from './loopYieldTransformer.ts';
 
 export function vitePluginAutoAwait(): Plugin {
@@ -118,27 +118,27 @@ export function vitePluginAutoAwait(): Plugin {
     		//if (!program) return null;
 
 			// HMR（ファイルの書き換え）対応：必要に応じてプログラムを再作成
-			const normalizedId = Utils.normalizePath(id);
+			//const normalizedId = Utils.normalizePath(id);
 			// 【インメモリ】ファイル読み込みをインターセプトするカスタムホストを作成
-    		const defaultHost = ts.createCompilerHost(compilerOptions);
-			const customHost: ts.CompilerHost = {
-				...defaultHost,
-				// TypeScript がファイルを要求した時、メモリに最新の修正コードがあればそれをパースして返す
-				getSourceFile: (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
-        			if (Cache.MemoryCache.has(fileName)) {
-            			return ts.createSourceFile(
-            				fileName,
-            				Cache.MemoryCache.get(fileName), // 最新の保存コード
-            				languageVersion,
-            				true // setParentNodes: true
-            			);
-          			}
-        			return defaultHost.getSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
-        		},
-        		fileExists: (fileName) => {
-        			return Cache.MemoryCache.has(fileName) || defaultHost.fileExists(fileName);
-        		}
-			}
+    		//const defaultHost = ts.createCompilerHost(compilerOptions);
+			// const customHost: ts.CompilerHost = {
+			// 	...defaultHost,
+			// 	// TypeScript がファイルを要求した時、メモリに最新の修正コードがあればそれをパースして返す
+			// 	getSourceFile: (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
+        	// 		if (Cache.MemoryCache.has(fileName)) {
+            // 			return ts.createSourceFile(
+            // 				fileName,
+            // 				Cache.MemoryCache.get(fileName), // 最新の保存コード
+            // 				languageVersion,
+            // 				true // setParentNodes: true
+            // 			);
+          	// 		}
+        	// 		return defaultHost.getSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
+        	// 	},
+        	// 	fileExists: (fileName) => {
+        	// 		return Cache.MemoryCache.has(fileName) || defaultHost.fileExists(fileName);
+        	// 	}
+			// }
 			// 最新の変更状態を反映した状態で Program と TypeChecker をビルドする
     		// これを挟まないと、何回保存しても初期状態のコードがトランスフォームされ続けます
     		//program = ts.createProgram([...configFileNames, normalizedId], compilerOptions, customHost);
@@ -150,11 +150,11 @@ export function vitePluginAutoAwait(): Plugin {
 
 			// ステップ１
 			// async generator化
-			const asyncGeneratorTransformResult = helperAG.transformAGObject(code,_id );
+			const asyncGeneratorTransformResult = helperAsyncGenerator.asyncGeneratorTransformer(code,_id );
 			// ステップ２
 			// await 追加( + 必要に応じて親メソッド定義を async にする)
 			// (magicStringを使う)
-			const awaitTransformResult = helperMS.transformObject(asyncGeneratorTransformResult.code, _id);
+			const awaitTransformResult = helperAwait.awaitTransformer(asyncGeneratorTransformResult.code, _id);
 			// ステップ３
 			// 繰り返しループの中に yieldをつける ( + 必要に応じて親メソッドを Generator関数にする )
 			// Typescriptの公式変換( 型情報は消えて、Javascript になる )

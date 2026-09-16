@@ -109,7 +109,7 @@ const arrowToAsyncGenerator = (expr: Expression<ts.Expression>): boolean => {
  * @param id 
  * @returns 
  */
-export function transformAGObject(code: string, id: string ): { code: string; map: any } {
+export function asyncGeneratorTransformer(code: string, id: string ): { code: string; map: any } {
     // if ( !isTargetId(id)) {
     //     return {code: code, map: null}
     // }

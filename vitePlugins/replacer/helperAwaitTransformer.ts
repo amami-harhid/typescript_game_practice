@@ -39,7 +39,7 @@ function getOrInitProject(rootPath: string): Project {
  * @param id 
  * @returns 
  */
-export function transformObject(code: string, id: string ): { code: string; map: any } {
+export function awaitTransformer(code: string, id: string ): { code: string; map: any } {
 
     // if ( !isTargetId(id)) {
     //     return {code: code, map: null}
