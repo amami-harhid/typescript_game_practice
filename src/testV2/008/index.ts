@@ -7,8 +7,8 @@
 import Cat from '../../../assets/cat.svg';
 import Cat2 from '../../../assets/cat2.svg';
 
-import { Sprite } from './lib/sprite';
-import { Engine } from './lib/engine';
+import { Sprite } from '../../lib/sprite';
+import { Engine } from '../../lib/engine';
 
 const sprite = new Sprite();
 
@@ -20,10 +20,10 @@ sprite.addImage(Cat2);
 
 /** スプライトのスレッド( 角度を変更 ) */
 const loop01 = function(this:Sprite) {
-    let counter = 0;
+    let counter = 2;
     for(;;){
         this.degree += 5;
-        if(counter > 50){
+        if(counter > 150){
             this.degree = 0; // --> Scratchと異なる
             break;
         }
@@ -40,7 +40,7 @@ const loop02 = function(this:Sprite)  {
             this.scale.w = 100;
             this.scale.h = 100;
         }
-        if(counter > 100){
+        if(counter > 150){
             this.scale.w = 100;
             this.scale.h = 100;
             break;

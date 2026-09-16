@@ -1,4 +1,4 @@
-import { Sprite } from "../lib/sprite";
+import { Sprite } from "../../../lib/sprite";
 
 export const test2 = function(this:Sprite) {
     this.degree = 20;

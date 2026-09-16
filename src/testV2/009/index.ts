@@ -4,18 +4,13 @@
  * そして表示する画像を切り替えるメソッドを用意する ( constume.next() )
  */
 
-import { Sprite } from './lib/sprite';
-import { Engine } from './lib/engine';
-import Cat from '../../../assets/cat.svg';
-
-const sprite = new Sprite();
-sprite.addImage(Cat);
+import { sprite, Sprite } from './sub/sprite';
+import { Engine } from '../../lib/engine';
 
 sprite.position.x = window.innerWidth/2;
 sprite.position.y = window.innerHeight/2;
 
 sprite.Control.wait(1);
-
 
 let muki = -1;
 const speed = 5;

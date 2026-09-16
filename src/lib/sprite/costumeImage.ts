@@ -1,4 +1,4 @@
-import { Loader } from "../../../../lib/loader";
+import { Loader } from "../loader";
 import { Canvas } from "../canvas";
 
 export class CostumeImage {

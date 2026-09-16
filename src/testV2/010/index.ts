@@ -4,8 +4,8 @@
  * そして表示する画像を切り替えるメソッドを用意する ( constume.next() )
  */
 
-import { Sprite } from './lib/sprite';
-import { Engine } from './lib/engine';
+import { Sprite } from '../../lib/sprite';
+import { Engine } from '../../lib/engine';
 import Cat from '../../../assets/cat.svg';
 import { test2 } from './sub/threads';
 

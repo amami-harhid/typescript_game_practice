@@ -8,12 +8,13 @@ import * as helperMS from './helperMS.ts';
 import * as helperAG from './helperAsyncGenerator.ts'
 import * as Cache from './memoryCache.ts';
 import * as Utils from './utils.ts';
+import { loopYieldTransformer } from './loopYieldTransformer.ts';
 
 export function vitePluginAutoAwait(): Plugin {
 	//let program: ts.Program | null = null;
 	//const inMemoryCache = new Map<string, string>();
 	let compilerOptions: ts.CompilerOptions = {};
-	let configFileNames: string[] = [];
+	//let configFileNames: string[] = [];
 	return {
 		name: 'vite-plugin-auto-await',
     	enforce: 'pre',
@@ -26,6 +27,13 @@ export function vitePluginAutoAwait(): Plugin {
 			return null;
 		},
 		hotUpdate(ctx) {
+			// Vite 8では、ブラウザ用のコードを処理する client 環境 と、サーバーサイド（SSRやVite自体の処理）用の
+			// コードを処理する ssr 環境 など、複数の環境が並行して動いている。
+			// そのため、1回の保存に対して「client 環境用」と「ssr 環境用」の2回、フックがトリガーされる
+			// client 環境の時だけ処理を行うとする（ssr などの時はスキップ）
+			if (this.environment.name !== 'client') {
+				return;
+			}
 			// Viteは開発スピードを極限まで上げるために
 			//「変更されたファイルだけをピンポイントで処理する」という強力なキャッシュ機構を持っています。
 			// しかし「保存されていない他のファイル」を起因としたコード置換をしている場合、ホットリロード時に
@@ -66,7 +74,6 @@ export function vitePluginAutoAwait(): Plugin {
 		},
     	// 💡 プロジェクト起動時に tsconfig.json を読み込んで、型環境を完全に構築する
     	buildStart() {
-			//helper.MemoryCache.clear();
       		const configPath = ts.findConfigFile(process.cwd(), ts.sys.fileExists, 'tsconfig.json');
       		if (!configPath) {
         		console.error("tsconfig.json が見つかりません。");
@@ -91,7 +98,7 @@ export function vitePluginAutoAwait(): Plugin {
 				//experimentalDecorators: true,
 			}
 			//compilerOptions.experimentalDecorators = false;
-			configFileNames = configParseResult.fileNames;
+			//configFileNames = configParseResult.fileNames;
 
 	      	// プロジェクト全体のファイルを最初からすべて含んだ Program を作成
     	  	//program = ts.createProgram(configParseResult.fileNames, compilerOptions);
@@ -140,53 +147,7 @@ export function vitePluginAutoAwait(): Plugin {
 			//const currentSourceFile = program.getSourceFile(normalizedId);
 			//if (!currentSourceFile) return null;
 
-			const loopYieldTransformer = (context: ts.TransformationContext) => {
-    	    	return (rootNode: ts.SourceFile) => {
 
-					function visit(node: ts.Node, inLoop = false): ts.Node {
-						// 繰り返し構文の検知と書き換え
-	            		if (
-    	            		ts.isForStatement(node) ||
-        	        		ts.isForInStatement(node) ||
-            	    		ts.isForOfStatement(node) ||
-                			ts.isWhileStatement(node) ||
-                			ts.isDoStatement(node)
-	            		) {
-    	            		if (helper.hasSkipComment(node, rootNode)) {
-        	            		return ts.visitEachChild(node, (n) => visit(n, false), context);
-            	    		}
-							const filePath = node.getSourceFile().fileName;
-							//console.log('filePath[3]=', filePath);
-							if(helper.isYieldExcluded(filePath)){
-								//console.log('fileName=',node.getSourceFile().fileName);
-								return ts.visitEachChild(node, (n) => visit(n, false), context);
-							}
-							const [change, loopNewStatement] = helper.loopChange(id, node, visit, inLoop);
-			                if(change) {
-								return loopNewStatement;
-							}							
-            			}
-
-			            // ループ内の if 文の検知
-						// ループの中にある if文(thenブロック、elseブロック)にて
-						// continue, break文があれば、yieldを付けてブロックを更新する
-    	    		    if (inLoop && ts.isIfStatement(node)) {
-        	        		const _node = node as ts.IfStatement;
-		    	            const newThen = helper.transformIfBody(_node.thenStatement, (n) => visit(n, true));
-							if( _node.elseStatement) {
-	        			        const newElse = helper.transformIfBody(_node.elseStatement, (n) => visit(n, true));
-    	            			const ifStatement = ts.factory.updateIfStatement(node, _node.expression, newThen[1], newElse[1]);
-								return ifStatement;
-							}else{
-    	            			const ifStatement = ts.factory.updateIfStatement(node, _node.expression, newThen[1], undefined);
-								return ifStatement;
-							}
-						}				
-			            return ts.visitEachChild(node, visit, context);
-					}
-					return ts.visitNode(rootNode, visit) as ts.SourceFile;
-				}
-			};
 			// ステップ１
 			// async generator化
 			const asyncGeneratorTransformResult = helperAG.transformAGObject(code,_id );
@@ -205,13 +166,18 @@ export function vitePluginAutoAwait(): Plugin {
 					// TypeScript 本来の構文変換の前に
 					// 自作の変換処理（トランスフォーマー）を実行させる
                 	before: [
-                        (context) => loopYieldTransformer(context)
+                        (context) => loopYieldTransformer(id, context)
                     ]
                 }
 			});
-			const finalCode = loopYieldTranspileResult.outputText;
+
+			// 元ファイルへ空行を追加したとき無視されないように、現在時刻を末尾行に追加する
+			const timestamp = Date.now();
+			const finalCode = loopYieldTranspileResult.outputText + `\n// _hmr_refresh_anchor_: ${timestamp}`;
+
 			const map1 = asyncGeneratorTransformResult.map;
 			const map2 = awaitTransformResult.map;
+
 			// TypeScriptが生成したマップをオブジェクトに変換
 			const map3Text = loopYieldTranspileResult.sourceMapText;
 			const map3 = (map3Text)? JSON.parse(map3Text): {};

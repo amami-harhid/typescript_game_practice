@@ -1,5 +1,7 @@
+/// <reference types="node" />
 /**
  * このファイルの内容を変更してはいけません。
+ * 1行目の reference ～ を消すと、node関係で「Not found」エラーが起こる可能性があります。
  */
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
