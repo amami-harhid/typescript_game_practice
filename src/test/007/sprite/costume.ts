@@ -21,6 +21,7 @@ export class Costume {
 
     async load() {
         const _loads: Promise<void>[] = [];
+        // @ts-loop-yield-skip
         for( const _img of this._images) {
             _loads.push( _img.load() ); // ロードを実行、プロミスをリストへ登録
         }

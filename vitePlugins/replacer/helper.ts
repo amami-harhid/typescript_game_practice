@@ -1,5 +1,5 @@
 import * as ts from 'typescript';
-import awaitTargetsJson from './awaitTargets.json' with { type: 'json' };
+
 import { LOOP_YIELD_SKIP_COMMENT } from './loopYieldSkipMark.ts';
 import { minimatch } from 'minimatch';
 import yieldExcludesJson from './yieldExcludes.json' with { type: 'json' };
@@ -51,6 +51,7 @@ export function hasSkipComment(node: ts.Node, sourceFile: ts.SourceFile): boolea
     return false;
 }
 
+import awaitTargetsJson from './awaitTargets.json' with { type: 'json' };
 /**
  * await を付与するメソッド名を配列化して返す。
  * @returns 

@@ -65,7 +65,7 @@ const transformLoopBody = (
         let isExitsyield = false;
         const lastStatementExpression = (lastStmt as ts.ExpressionStatement).expression;
         if(ts.isYieldExpression(lastStatementExpression)) {
-            console.log('Last statement is yield')
+            //console.log('Last statement is yield')
             isExitsyield = true;
         } 
         const trailingCommentsOfLastStmt = ts.getTrailingCommentRanges(sourceFile.text, lastStmt.end);

@@ -73,6 +73,7 @@ export class Engine {
             this._stage.draw();
         }
         // --- 個別スプライトを個別キャンバスへ描画し、その結果を本体キャンバスへ描画する
+        // @ts-loop-yield-skip
         for(const _sprite of this._sprites){
             _sprite.draw();
         }
@@ -84,13 +85,15 @@ export class Engine {
     }
     static run() {
         const gList: Thread[] = []
+        // @ts-loop-yield-skip
         for( const f of Engine.threads){
             const g = f();
             gList.push(g);
         }
         const _engine = Engine.getInstance();
-        let interval = setInterval( ()=>{
+        const interval = setInterval( ()=>{
             let _processExit = true;
+            // @ts-loop-yield-skip
             for(const g of gList){
                 const rtn = g.next();
                 if(rtn.done == undefined || rtn.done === false){
@@ -105,5 +108,6 @@ export class Engine {
     }
 }
 const Interval = 1000/30;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Thread = Generator<any, void, unknown>;
 type ThreadCaller = ()=>Thread;

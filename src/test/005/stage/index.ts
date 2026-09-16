@@ -33,6 +33,7 @@ export class Stage {
         this._mainCtx.clearRect(0, 0, this._viewWidth, this._viewHeight);
 
         // 【A】の結果を本体の座標 (中心) に中心が来るように描画
+        // @ts-loop-yield-skip
         for(const _sprite of Stage._sprites){
             const _position = _sprite.position;
             const targetX = _position.x;

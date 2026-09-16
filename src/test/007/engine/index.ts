@@ -74,6 +74,7 @@ export class Engine {
             this._stage.draw();
         }
         // --- 個別スプライトを個別キャンバスへ描画し、その結果を本体キャンバスへ描画する
+        // @ts-loop-yield-skip
         for(const _sprite of this._sprites){
             _sprite.draw();
         }
@@ -86,12 +87,14 @@ export class Engine {
     static async run() {
         const engine = Engine.getInstance();
         const _loads: Promise<void>[] = [];
+        // @ts-loop-yield-skip
         for(const _sprite of engine.sprites){
             _loads.push( _sprite.costume.load() );
         }
         await Promise.all( _loads );
         const threads : {active: boolean, g: Thread}[] = [];
         const gList: Thread[] = []
+        // @ts-loop-yield-skip
         for( const f of Engine.threads){
             const g = f();
             gList.push(g);
@@ -99,6 +102,7 @@ export class Engine {
         }
         const _engine = Engine.getInstance();
         const interval = setInterval( async ()=>{
+            // @ts-loop-yield-skip
             for(const thread of threads){
                 if( thread.active === true){
                     thread.g.next().then((rtn)=>{
@@ -110,6 +114,7 @@ export class Engine {
             }
             let _processExit = false;
             _engine.draw();
+            // @ts-loop-yield-skip
             for(const thread of threads){
                 if(thread.active === false){
                     _processExit = true;

@@ -14,7 +14,7 @@ import { Engine } from './engine';
 const sprite = new Sprite();
 
 // スプライトの初期設定
-sprite.position.x = window.innerWidth/2;
+sprite.position.x = window.innerWidth/2;     
 sprite.position.y = window.innerHeight/2;
 sprite.addImage(Cat);
 sprite.addImage(Cat2);
