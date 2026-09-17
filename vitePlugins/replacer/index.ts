@@ -179,7 +179,7 @@ export function vitePluginAutoAwait(): Plugin {
 			//const currentSourceFile = program.getSourceFile(normalizedId);
 			//if (!currentSourceFile) return null;
 
-
+			const emitError = emitErrorWrapper.bind(this);
 			// ステップ１
 			// async generator化
 			const asyncGeneratorTransformResult = helperAsyncGenerator.asyncGeneratorTransformer(code,_id );
@@ -188,7 +188,7 @@ export function vitePluginAutoAwait(): Plugin {
 			// ステップ２
 			// await 追加( + 必要に応じて親メソッド定義を async にする)
 			// (magicStringを使う)
-			const awaitTransformResult = helperAwait.awaitTransformer(asyncGeneratorTransformResult.code, _id, emitErrorWrapper.bind(this), clearCache);
+			const awaitTransformResult = helperAwait.awaitTransformer(asyncGeneratorTransformResult.code, _id, emitError, clearCache);
 			// ステップ３
 			// 繰り返しループの中に yieldをつける ( + 必要に応じて親メソッドを Generator関数にする )
 			// Typescriptの公式変換( 型情報は消えて、Javascript になる )
@@ -200,7 +200,7 @@ export function vitePluginAutoAwait(): Plugin {
 					// TypeScript 本来の構文変換の前に
 					// 自作の変換処理（トランスフォーマー）を実行させる
                 	before: [
-                        (context) => loopYieldTransformer(id, context)
+                        (context) => loopYieldTransformer(id, context, emitError, clearCache)
                     ]
                 }
 			});

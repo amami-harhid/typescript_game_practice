@@ -204,7 +204,12 @@ const transformIfBody = ( node: ts.Statement, visit: Visit): [boolean, ts.Statem
 }
 
 
-export const loopYieldTransformer = (id: string, context: ts.TransformationContext) => {
+export const loopYieldTransformer = (
+    id: string, 
+    context: ts.TransformationContext,
+    error: (errObj: helper.ErrorObj)=>void,
+    clearCache: () => void
+) => {
     return (rootNode: ts.SourceFile) => {
 
         function visit(node: ts.Node, inLoop = false): ts.Node {
@@ -225,6 +230,43 @@ export const loopYieldTransformer = (id: string, context: ts.TransformationConte
                     //console.log('fileName=',node.getSourceFile().fileName);
                     return ts.visitEachChild(node, (n) => visit(n, false), context);
                 }
+                // 親関数を取り出す。
+                let errorNode: ts.Node|undefined = undefined;
+                const parent = helper.findParentFunction(node);
+                if( parent == undefined){
+                    errorNode = node; // ループのノード
+                }else if( !helper.isGenerator(parent) && !helper.isAsyncGenerator(parent)) {
+                    errorNode = parent; // 親関数
+                }
+                if(errorNode){
+                    const info = helper.getTsNodeLocation(errorNode);
+                    // 先にメモリを解放する(エラー表示後のホットリロード時に全コードの整合性を保つ)ためにキャッシュクリアを行う
+                    clearCache();
+                        const errObj: helper.ErrorObj = {
+                            message: 'Generator関数でない中でループにyieldを付与できません',
+                            id: id,
+                            loc: { line: info.line, column: info.column } // オプション: エラー箇所の行・列
+
+                        }
+                    error(errObj);
+
+                }
+                if(parent){
+                    // 親関数が generator/asyncGeneratorでないときはエラーとする
+                    if( !helper.isGenerator(parent) && !helper.isAsyncGenerator(parent)) {
+                        const info = helper.getTsNodeLocation(parent);
+                        // 先にメモリを解放する(エラー表示後のホットリロード時に全コードの整合性を保つ)ためにキャッシュクリアを行う
+                        clearCache();
+                        const errObj: helper.ErrorObj = {
+                            message: 'Generator関数でないのでループにyieldを付与できません',
+                            id: id,
+                            loc: { line: info.line, column: info.column } // オプション: エラー箇所の行・列
+
+                        }
+                        error(errObj);
+                    }
+                }
+
                 const [change, loopNewStatement] = loopChange(id, node, visit, inLoop);
                 if(change) {
                     return loopNewStatement;

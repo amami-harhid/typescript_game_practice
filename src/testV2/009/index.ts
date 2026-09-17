@@ -12,10 +12,14 @@ sprite.position.y = window.innerHeight/2;
 
 sprite.Control.wait(1);
 
+
 let muki = -1;
 const speed = 5;
 const test = function() {
     //sprite.Control.wait(400);
+    // for(let idx=0; idx<100; idx++){
+    //     console.log(idx);
+    // }
     return true;
 }
 console.log(test());
