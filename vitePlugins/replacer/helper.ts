@@ -2,8 +2,9 @@ import * as ts from 'typescript';
 
 import { LOOP_YIELD_SKIP_COMMENT } from './TagMarks.ts';
 import { minimatch } from 'minimatch';
-import yieldExcludesJson from './yieldExcludes.json' with { type: 'json' };
-import targetIdsJson from './targetIds.json' with { type: 'json'};
+import yieldExcludesJson from './json/yieldExcludes.json' with { type: 'json' };
+import targetIdsJson from './json/targetIds.json' with { type: 'json'};
+import awaitTargetsJson from './json/awaitTargets.json' with { type: 'json' };
 
 export type ErrorObj = { message: string; id?: string; loc?: { line: number; column: number } };
 
@@ -122,7 +123,6 @@ export function hasSkipComment(node: ts.Node, sourceFile: ts.SourceFile): boolea
     return false;
 }
 
-import awaitTargetsJson from './awaitTargets.json' with { type: 'json' };
 /**
  * await を付与するメソッド名を配列化して返す。
  * @returns 

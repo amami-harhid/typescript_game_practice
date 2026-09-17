@@ -7,14 +7,10 @@ import * as helper from './helper.ts';
 import * as helperAwait from './helperAwaitTransformer.ts';
 import * as helperAsyncGenerator from './helperAsyncGenerator.ts'
 import * as Cache from './memoryCache.ts';
-//import * as Utils from './utils.ts';
 import { loopYieldTransformer } from './loopYieldTransformer.ts';
 
 export function vitePluginAutoAwait(): Plugin {
-	//let program: ts.Program | null = null;
-	//const inMemoryCache = new Map<string, string>();
 	let compilerOptions: ts.CompilerOptions = {};
-	//let configFileNames: string[] = [];
 	let server: ViteDevServer | null = null;
 	/** ファイルパスごとの最終エラー時刻を記録するMap */
 	const lastErrorCache = new Map<string, number>();
@@ -96,27 +92,13 @@ export function vitePluginAutoAwait(): Plugin {
       		);
 			compilerOptions = {
 				...configParseResult.options,
-				//target: ts.ScriptTarget.ES2022,
-		        //module: ts.ModuleKind.ESNext,
         		sourceMap: true,       // これにより、emit時に元の位置に紐づくマップが自動生成されます
         		inlineSources: true,   // 元のコードをマップに含める
-				//noEmit : false,
-				//emitDeclarationOnly: true,
-				//experimentalDecorators: true,
 			}
-			//compilerOptions.experimentalDecorators = false;
-			//configFileNames = configParseResult.fileNames;
-
-	      	// プロジェクト全体のファイルを最初からすべて含んだ Program を作成
-    	  	//program = ts.createProgram(configParseResult.fileNames, compilerOptions);
     	},
-		buildEnd() {
-			//helper.MemoryCache.clear();
-			//program = null;
-		},
 	    transform(code, id) {
 			const [_id] = id.split('?');
-			// キャッシュを強制クリアするヘルパー関数
+			/** キャッシュを強制クリアするヘルパー関数 */ 
 			const clearCache = () => {
         		if (server) {
           			const moduleNode = server.moduleGraph.getModuleById(id);
@@ -126,7 +108,7 @@ export function vitePluginAutoAwait(): Plugin {
           			}
         		}
 			}
-			// エラー発生時のラッパー関数
+			/** エラー発生時のラッパー関数 */ 
     	  	const emitErrorWrapper = (errObj: helper.ErrorObj) => {
 				const now = Date.now();
 				const lastErrorTime = lastErrorCache.get(id) || 0;
@@ -144,47 +126,13 @@ export function vitePluginAutoAwait(): Plugin {
 
     		// node_modules やに対象外のファイルはスルー
 			if( helper.isTargetIdExcluded(_id)) {
-				//console.log('Id excluded = ', _id)
 				return null;
 			}
-    		//if (!program) return null;
-
-			// HMR（ファイルの書き換え）対応：必要に応じてプログラムを再作成
-			//const normalizedId = Utils.normalizePath(id);
-			// 【インメモリ】ファイル読み込みをインターセプトするカスタムホストを作成
-    		//const defaultHost = ts.createCompilerHost(compilerOptions);
-			// const customHost: ts.CompilerHost = {
-			// 	...defaultHost,
-			// 	// TypeScript がファイルを要求した時、メモリに最新の修正コードがあればそれをパースして返す
-			// 	getSourceFile: (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
-        	// 		if (Cache.MemoryCache.has(fileName)) {
-            // 			return ts.createSourceFile(
-            // 				fileName,
-            // 				Cache.MemoryCache.get(fileName), // 最新の保存コード
-            // 				languageVersion,
-            // 				true // setParentNodes: true
-            // 			);
-          	// 		}
-        	// 		return defaultHost.getSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
-        	// 	},
-        	// 	fileExists: (fileName) => {
-        	// 		return Cache.MemoryCache.has(fileName) || defaultHost.fileExists(fileName);
-        	// 	}
-			// }
-			// 最新の変更状態を反映した状態で Program と TypeChecker をビルドする
-    		// これを挟まないと、何回保存しても初期状態のコードがトランスフォームされ続けます
-    		//program = ts.createProgram([...configFileNames, normalizedId], compilerOptions, customHost);
-			//if(!program) return null;
-
-			//const currentSourceFile = program.getSourceFile(normalizedId);
-			//if (!currentSourceFile) return null;
-
+			// this(TransformPluginContext)配下とする
 			const emitError = emitErrorWrapper.bind(this);
 			// ステップ１
 			// async generator化
 			const asyncGeneratorTransformResult = helperAsyncGenerator.asyncGeneratorTransformer(code,_id );
-			//console.log('===========================')
-			//console.log(asyncGeneratorTransformResult.code)
 			// ステップ２
 			// await 追加( + 必要に応じて親メソッド定義を async にする)
 			// (magicStringを使う)

@@ -14,9 +14,9 @@
 import * as ts from 'typescript';
 import { Node, Expression, Project, SyntaxKind, PropertyAccessExpression, SourceFile } from 'ts-morph';
 import MagicString from 'magic-string';
-import path from 'path';
+import * as path from 'path';
 import * as Cache from './memoryCache.ts';
-import targetThreadSetter from './targetThreadSetter.json' with { type: 'json' };
+import targetThreadSetter from './json/targetThreadSetter.json' with { type: 'json' };
 import * as TagMark from './TagMarks.ts';
 
 // トランスフォーマーを呼び出すごとに新しくProjectを作る

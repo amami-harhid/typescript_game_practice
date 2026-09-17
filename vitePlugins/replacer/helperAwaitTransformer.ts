@@ -1,7 +1,7 @@
 import { JSDocTagInfo, Project, PropertyAccessExpression, Symbol, SyntaxKind } from 'ts-morph';
 import MagicString from 'magic-string';
-import awaitTargetsJson from './awaitTargets.json' with { type: 'json' };
-import path from 'path';
+import awaitTargetsJson from './json/awaitTargets.json' with { type: 'json' };
+import * as path from 'path';
 import * as TagMark from './TagMarks.ts';
 import type { ErrorObj } from './helper.ts';
 
