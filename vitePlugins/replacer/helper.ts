@@ -1,6 +1,6 @@
 import * as ts from 'typescript';
 
-import { LOOP_YIELD_SKIP_COMMENT } from './loopYieldSkipMark.ts';
+import { LOOP_YIELD_SKIP_COMMENT } from './TagMarks.ts';
 import { minimatch } from 'minimatch';
 import yieldExcludesJson from './yieldExcludes.json' with { type: 'json' };
 import targetIdsJson from './targetIds.json' with { type: 'json'};

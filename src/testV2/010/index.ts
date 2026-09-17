@@ -23,27 +23,28 @@ const speed = 6;
 const test = function() {
     return true;
 }
-console.log(test());
-if(muki == -1) {
-const test = async function* (this:Sprite) {
-    this.degree = 20;
-    // ずっと繰り返す
-    for(;;){
 
-        if(this.degree == 0){
-            continue;
-        }
-        if(this.degree == 90){
-            break;
-        }
-        this.Control.wait(2);
-        muki *= -1;
 
+    const test3 = function (this:Sprite) {
+        this.degree = 20;
+        // ずっと繰り返す
+        for(;;){
+
+            if(this.degree == 0){
+                continue;
+            }
+            if(this.degree == 90){
+                break;
+            }
+            this.Control.wait(2);
+            muki *= -1;
+
+        }
     }
-}
-sprite.Thread.func = test;
+    
+    sprite.Thread.func = test3;
+console.log(test());
 
-}
 
 sprite.Thread.func = function (this:Sprite){
     this.degree = 15;

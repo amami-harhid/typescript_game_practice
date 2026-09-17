@@ -23,6 +23,10 @@ export class SpriteBase extends Entity{
     get Thread() {
         const _me = this;
         return {
+            /**
+             * スレッドのセッター
+             * @needsAsyncGenerator
+             */
             set func(f: ThreadCaller){
                 const _f = f.bind(_me);
                 Engine.addThread( _f );        

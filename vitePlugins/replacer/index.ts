@@ -151,6 +151,8 @@ export function vitePluginAutoAwait(): Plugin {
 			// ステップ１
 			// async generator化
 			const asyncGeneratorTransformResult = helperAsyncGenerator.asyncGeneratorTransformer(code,_id );
+			//console.log('===========================')
+			//console.log(asyncGeneratorTransformResult.code)
 			// ステップ２
 			// await 追加( + 必要に応じて親メソッド定義を async にする)
 			// (magicStringを使う)

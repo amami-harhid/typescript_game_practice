@@ -2,6 +2,7 @@ import { JSDocTagInfo, Project, PropertyAccessExpression, Symbol, SyntaxKind } f
 import MagicString from 'magic-string';
 import awaitTargetsJson from './awaitTargets.json' with { type: 'json' };
 import path from 'path';
+import * as TagMark from './TagMarks.ts';
 
 export const getAwaitTargets = (): [string[], string[] ] => {
     const list:string[] = [];
@@ -105,7 +106,8 @@ export function awaitTransformer(code: string, id: string ): { code: string; map
                         tags.forEach((tag: JSDocTagInfo)=>{
                             const tagName = tag.getName(); // this.Control.wait(10) ==> wait のJSDOCにある タグ @～
                             //console.log('tagName=', tagName);
-                            if( tagName == 'needsAwait') {
+                            const NeedsAwait = TagMark.NEEDS_AWAIT_METHOD_COMMENT.replace(/^@/, ''); // 先頭の@を消す
+                            if( tagName == NeedsAwait) {
                                 //console.log('==== needsAwaot [1] ====')
                                 const start = callExpr.getStart();
                                 //console.log('==== needsAwaot [2] ====')
