@@ -216,8 +216,8 @@ export const loopYieldTransformer = (
             // 繰り返し構文の検知と書き換え
             if (
                 ts.isForStatement(node) ||
-                ts.isForInStatement(node) ||
-                ts.isForOfStatement(node) ||
+                // ts.isForInStatement(node) ||
+                // ts.isForOfStatement(node) ||
                 ts.isWhileStatement(node) ||
                 ts.isDoStatement(node)
                 ) {
