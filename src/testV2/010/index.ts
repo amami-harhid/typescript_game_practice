@@ -25,8 +25,9 @@ const test = function() {
 }
 
 
-    const test3 = function (this:Sprite) {
-        this.degree = 20;
+const test3 = function (this:Sprite) {
+
+    this.degree = 20;
         // ずっと繰り返す
         for(;;){
 
@@ -42,9 +43,8 @@ const test = function() {
         }
     }
     
-    sprite.Thread.func = test3;
+sprite.Thread.func = test3;
 console.log(test());
-
 
 sprite.Thread.func = function (this:Sprite){
     this.degree = 15;

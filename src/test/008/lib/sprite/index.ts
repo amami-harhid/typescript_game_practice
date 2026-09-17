@@ -1,11 +1,16 @@
+import { ThreadCaller } from "../engine";
+import { Engine } from "../engine";
 import { SpriteBase } from "./base";
+import { controlWait } from "../../../../lib/controls";
 export class Sprite extends SpriteBase{
     private _scale = {w: 100, h: 100};
     private _degree = 0;
     private _canvas!: HTMLCanvasElement;
     private _position: {x: number, y: number} = {x: 0, y: 0};
+    private _thread: Thread;
     constructor() {
         super();
+        this._thread = new Thread(this);
     }
     set position (_position: {x: number, y: number}) {
         this._position.x = _position.x;
@@ -49,25 +54,31 @@ export class Sprite extends SpriteBase{
         this.costume.rescale();
 
         this.costume.draw();
-        // // 中心を軸にSVGを描画
-        // svgImage.ctx.drawImage(svgImage.image, -svgImage.width / 2, -svgImage.height / 2, svgImage.width, svgImage.height);
-        // svgImage.ctx.restore();
 
-        // const _position = this.position;
-        // const targetX = _position.x;
-        // const targetY = _position.y;
-        // const _canvas = svgImage.canvas;
-        // const _size = svgImage.diagonalLineLength;
-        // console.log('this._engine.mainCtx=', this._engine.mainCtx);
-        // console.log('[00001]_size=', _size);
-        // console.log('_canvas width, height = ', _canvas.width, _canvas.height);
-        // this._engine.mainCtx.drawImage(
-        //         _canvas, 
-        //         targetX - _size / 2, 
-        //         targetY - _size / 2, 
-        //         _size, 
-        //         _size
-        // );
+    }
+    get Thread() {
+        return this._thread;
+    }
 
+    get Control() {
+        return {
+            wait: controlWait,
+        }
+    }
+}
+
+class Thread {
+    private sprite: Sprite;
+
+    constructor(sprite:Sprite) {
+        this.sprite = sprite;
+    }
+    /**
+    * スレッドのセッター
+     * @needsAsyncGenerator
+     */
+    set func(f: ThreadCaller){
+        const _f = f.bind(this.sprite);
+        Engine.addThread( _f );        
     }
 }

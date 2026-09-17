@@ -19,7 +19,7 @@ const test = function() {
 }
 console.log(test());
 if(muki == -1) {
-const test = async function* (this:Sprite) {
+const test = function (this:Sprite) {
     this.degree = 20;
     // ずっと繰り返す
     for(;;){
@@ -30,7 +30,7 @@ const test = async function* (this:Sprite) {
         if(this.degree == 90){
             break;
         }
-       await this.Control.wait(2);
+       this.Control.wait(2);
         muki *= -1;
 
     }
