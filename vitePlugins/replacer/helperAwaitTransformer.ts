@@ -3,6 +3,7 @@ import MagicString from 'magic-string';
 import awaitTargetsJson from './awaitTargets.json' with { type: 'json' };
 import path from 'path';
 import * as TagMark from './TagMarks.ts';
+import type { ErrorObj } from './helper.ts';
 
 export const getAwaitTargets = (): [string[], string[] ] => {
     const list:string[] = [];
@@ -16,15 +17,13 @@ export const getAwaitTargets = (): [string[], string[] ] => {
 
 const [_, awaitTargetFullMethods] = getAwaitTargets();
 
-// パフォーマンス向上のため、Projectインスタンスはファイル間で使い回す（シングルトン）
-let project: Project | null = null;
+// トランスフォーマーを呼び出すごとに新しくProjectを作る
+function getOrInitProject(): Project {
 
-function getOrInitProject(rootPath: string): Project {
-    if (project) return project;
-
-    project = new Project({
+    const project = new Project({
         compilerOptions: { target: 99 /* ESNext */ },
         skipAddingFilesFromTsConfig: true, // 高速化
+        //useInMemoryFileSystem: true // メモリだけで完結させる
     });
 
     return project;
@@ -40,21 +39,32 @@ function getOrInitProject(rootPath: string): Project {
  * @param id 
  * @returns 
  */
-export function awaitTransformer(code: string, id: string ): { code: string; map: any } {
+export function awaitTransformer(
+    code: string, 
+    id: string, 
+    emitError: (errObj : ErrorObj) => void,
+    clearCache: () => void
+): { code: string; map: any } {
 
-    // if ( !isTargetId(id)) {
-    //     return {code: code, map: null}
-    // }
-    
+    // プロジェクトの再作成をすることで キャッシュの衝突回避対応は不要です
+    // キャッシュの衝突を防ぐため、元の id の末尾にダミーの接尾辞をつける
+    // 例: "src/main.ts" -> "src/main.stage2.ts"
+    //const date = new Date();
+    //const dummyId = id.replace(/(\.[jt]sx?)$/, '.stage2'+date.getTime()+'$1');
+
     const magicString = new MagicString(code)
-    const currentProject = getOrInitProject(process.cwd());
+    const currentProject = getOrInitProject();
+
+    // プロジェクトの再作成をすることで 既存ファイルの明示的な削除は不要です
+    // const existingFile = currentProject.getSourceFile(id);
+    // if(existingFile){
+    //     // もし既存のファイルが残っていたら明示的に削除してキャッシュを飛ばす
+    //     currentProject.removeSourceFile(existingFile);
+    // }
+
+    // 最新の code（前段トランスフォーマで 置換されたもの）でファイルを新規作成
     const sourceFile = currentProject.createSourceFile(id, code, { overwrite: true });
     const typeChecker = currentProject.getTypeChecker();
-    // new Expression の探索
-    //sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression).forEach((newExpr) => {
-        //const constructorExpression = newExpr.getExpression();
-        //console.log('constructorExpression', constructorExpression.getText());        
-    //});
 
     // Call Expression の探索
     sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression).forEach((callExpr) => {
@@ -72,20 +82,14 @@ export function awaitTransformer(code: string, id: string ): { code: string; map
                             || callExpr.getFirstAncestorByKind(SyntaxKind.FunctionDeclaration)
                             || callExpr.getFirstAncestorByKind(SyntaxKind.MethodDeclaration)
                             || callExpr.getFirstAncestorByKind(SyntaxKind.ArrowFunction);
-        //console.log('parentFunction=', parentFunction)
         let isParentFunctionAsync = false;
         if(parentFunction && parentFunction.isAsync()) {
             isParentFunctionAsync = true;
         }
-        //console.log('isParentFunctionAsync=', isParentFunctionAsync);
-        //const text = callExpr.getText();
-        //console.log('[1]callExpr.getText()= ', text); // this.Control.wait(10) ==>  this.Control.wait(10)
         const expression = callExpr.getExpression(); // // 型 LeftHandSideExpression<ts.LeftHandSideExpression>
         if (expression.getKind() === SyntaxKind.PropertyAccessExpression) {
             const propAccess = expression as PropertyAccessExpression;
             const methodName = propAccess.getName(); // this.Control.wait(10) ==> wait
-            //console.log('[3]propAccess.getText()=', propAccess.getText());
-            //console.log('methodName=', methodName);
             const objectExpression = propAccess.getExpression(); // 型 LeftHandSideExpression<ts.LeftHandSideExpression>
             // 左側のプロパティを取り出す
             // 例）this.Control.wait のとき"Control"を得る
@@ -108,24 +112,32 @@ export function awaitTransformer(code: string, id: string ): { code: string; map
                             //console.log('tagName=', tagName);
                             const NeedsAwait = TagMark.NEEDS_AWAIT_METHOD_COMMENT.replace(/^@/, ''); // 先頭の@を消す
                             if( tagName == NeedsAwait) {
-                                //console.log('==== needsAwaot [1] ====')
-                                const start = callExpr.getStart();
-                                //console.log('==== needsAwaot [2] ====')
-                                //const end = callExpr.getEnd();
-                                //console.log('magicstring appendLeft ', `await ${text}`);
-                                // 左側に("await ")を追加する
-                                magicString.appendLeft(start, 'await ');
-
                                 // 直親の関数定義がAsync でないとき
                                 if(!isParentFunctionAsync && parentFunction){
-                                    const start = parentFunction.getStart();
-                                    magicString.appendLeft(start, 'async ');
-                                    //console.log('change parent function to async')
-                                
-                                //}else{
-                                    //console.log('do not change parent function to async')
+                                    // 行番号
+                                    const lineNo = callExpr.getStartLineNumber();
+                                    // 列番号 = ノード全体の開始位置 - 行の開始位置 + 1 
+                                    const columnNo = callExpr.getStart() - callExpr.getStartLinePos() + 1;
+                                    // 先にメモリを解放する(エラー表示後のホットリロード時に全コードの整合性を保つ)ために【A】【B】を行う
+                                    // 【A】ts-morph のメモリ解放
+                                    sourceFile.forget(); 
+                                    // 【B】Vite のモジュールキャッシュをクリア（次回1段目から実行させるため）
+                                    clearCache();
+                                    // エラーメッセージを表示する
+                                    const errObj : ErrorObj = {
+                                        message: 'async関数でないのでawaitを付与できません',
+                                        id: id,
+                                        loc: { line: lineNo, column: columnNo } // オプション: エラー箇所の行・列
+                                    };
+                                    emitError(errObj);
+                                }else{
+                                    const start = callExpr.getStart();
+                                    // 左側に("await ")を追加する
+                                    magicString.appendLeft(start, 'await ');
+
+                                    return true;
+
                                 }
-                                return true;
                             }
                             return false;
                         });
@@ -144,6 +156,8 @@ export function awaitTransformer(code: string, id: string ): { code: string; map
     // map 結合時に sourcesを一致させてマップパイプラインを
     // つなげるようにするための考慮である
     const baseId = path.basename(id);
+
+    currentProject.removeSourceFile(sourceFile)
 
     return {
         code : magicString.toString(), 

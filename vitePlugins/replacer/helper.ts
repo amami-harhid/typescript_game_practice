@@ -5,6 +5,8 @@ import { minimatch } from 'minimatch';
 import yieldExcludesJson from './yieldExcludes.json' with { type: 'json' };
 import targetIdsJson from './targetIds.json' with { type: 'json'};
 
+export type ErrorObj = { message: string; id?: string; loc?: { line: number; column: number } };
+
 /**
  * 置換非対象の id ( = path ) を判定する
  * @param id 

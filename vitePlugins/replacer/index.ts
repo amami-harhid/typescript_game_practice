@@ -1,5 +1,5 @@
 import * as ts from 'typescript';
-import type { Plugin } from 'vite';
+import type { Plugin, ViteDevServer  } from 'vite';
 import * as path from 'path';
 import remapping from '@ampproject/remapping';
 
@@ -15,6 +15,9 @@ export function vitePluginAutoAwait(): Plugin {
 	//const inMemoryCache = new Map<string, string>();
 	let compilerOptions: ts.CompilerOptions = {};
 	//let configFileNames: string[] = [];
+	let server: ViteDevServer | null = null;
+	/** ファイルパスごとの最終エラー時刻を記録するMap */
+	const lastErrorCache = new Map<string, number>();
 	return {
 		name: 'vite-plugin-auto-await',
     	enforce: 'pre',
@@ -26,6 +29,10 @@ export function vitePluginAutoAwait(): Plugin {
 			}
 			return null;
 		},
+		// 開発サーバーのインスタンスを保持する
+    	configureServer(_server) {
+    		server = _server;
+    	},
 		hotUpdate(ctx) {
 			// Vite 8では、ブラウザ用のコードを処理する client 環境 と、サーバーサイド（SSRやVite自体の処理）用の
 			// コードを処理する ssr 環境 など、複数の環境が並行して動いている。
@@ -109,6 +116,31 @@ export function vitePluginAutoAwait(): Plugin {
 		},
 	    transform(code, id) {
 			const [_id] = id.split('?');
+			// キャッシュを強制クリアするヘルパー関数
+			const clearCache = () => {
+        		if (server) {
+          			const moduleNode = server.moduleGraph.getModuleById(id);
+          			if (moduleNode) {
+            			// モジュールグラフからこのファイルのキャッシュを無効化
+            			server.moduleGraph.invalidateModule(moduleNode);
+          			}
+        		}
+			}
+			// エラー発生時のラッパー関数
+    	  	const emitErrorWrapper = (errObj: helper.ErrorObj) => {
+				const now = Date.now();
+				const lastErrorTime = lastErrorCache.get(id) || 0;
+				// 前回のエラーから 500ms 以内の場合は、Viteの重複リクエストとみなして処理をスルーする
+				if (now - lastErrorTime < 500) {
+					// すでに1回目でブラウザにエラーは送られているため
+					// 2回目はビルドをクラッシュさせずに静かにプロセスを終了させます
+					return
+				}
+				// タイムスタンプを更新
+				lastErrorCache.set(id, now);
+				// 本物の Vite エラーを実行
+				this.error(errObj);
+    		};
 
     		// node_modules やに対象外のファイルはスルー
 			if( helper.isTargetIdExcluded(_id)) {
@@ -156,7 +188,7 @@ export function vitePluginAutoAwait(): Plugin {
 			// ステップ２
 			// await 追加( + 必要に応じて親メソッド定義を async にする)
 			// (magicStringを使う)
-			const awaitTransformResult = helperAwait.awaitTransformer(asyncGeneratorTransformResult.code, _id);
+			const awaitTransformResult = helperAwait.awaitTransformer(asyncGeneratorTransformResult.code, _id, emitErrorWrapper.bind(this), clearCache);
 			// ステップ３
 			// 繰り返しループの中に yieldをつける ( + 必要に応じて親メソッドを Generator関数にする )
 			// Typescriptの公式変換( 型情報は消えて、Javascript になる )
