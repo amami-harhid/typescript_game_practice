@@ -110,7 +110,7 @@ export function awaitTransformer(
                         tags.forEach((tag: JSDocTagInfo)=>{
                             const tagName = tag.getName(); // this.Control.wait(10) ==> wait のJSDOCにある タグ @～
                             //console.log('tagName=', tagName);
-                            const NeedsAwait = TagMark.NEEDS_AWAIT_METHOD_COMMENT.replace(/^@/, ''); // 先頭の@を消す
+                            const NeedsAwait = TagMark.NEEDS_AWAIT_METHOD_TAG.replace(/^@/, ''); // 先頭の@を消す
                             if( tagName == NeedsAwait) {
                                 // 直親の関数定義がAsync でないとき
                                 if(!isParentFunctionAsync && parentFunction){

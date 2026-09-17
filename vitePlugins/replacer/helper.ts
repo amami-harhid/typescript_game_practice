@@ -1,6 +1,6 @@
 import * as ts from 'typescript';
 
-import { LOOP_YIELD_SKIP_COMMENT } from './TagMarks.ts';
+import { LOOP_YIELD_SKIP_TAG } from './TagMarks.ts';
 import { minimatch } from 'minimatch';
 import yieldExcludesJson from './json/yieldExcludes.json' with { type: 'json' };
 import targetIdsJson from './json/targetIds.json' with { type: 'json'};
@@ -116,7 +116,7 @@ export function hasSkipComment(node: ts.Node, sourceFile: ts.SourceFile): boolea
 
     for (const commentRange of leadingComments) {
         const commentText = sourceFile.text.substring(commentRange.pos, commentRange.end);
-        if (commentText.includes( LOOP_YIELD_SKIP_COMMENT )) {
+        if (commentText.includes( LOOP_YIELD_SKIP_TAG )) {
             return true;
         }
     }

@@ -138,7 +138,7 @@ export function asyncGeneratorTransformer(code: string, id: string ): { code: st
                                     const jsDocs = setterDeclaration.getJsDocs();
                                     const match = jsDocs.some((jsDoc)=>{
                                         const jsDocText = jsDoc.getText();
-                                        if(jsDocText.includes( TagMark.THREAD_SETTER_COMMENT )) {
+                                        if(jsDocText.includes( TagMark.THREAD_SETTER_TAG )) {
                                             return true;
                                         }
                                     });

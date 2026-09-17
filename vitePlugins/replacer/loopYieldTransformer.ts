@@ -225,9 +225,7 @@ export const loopYieldTransformer = (
                     return ts.visitEachChild(node, (n) => visit(n, false), context);
                 }
                 const filePath = node.getSourceFile().fileName;
-                //console.log('filePath[3]=', filePath);
                 if(helper.isYieldExcluded(filePath)){
-                    //console.log('fileName=',node.getSourceFile().fileName);
                     return ts.visitEachChild(node, (n) => visit(n, false), context);
                 }
                 // 親関数を取り出す。
