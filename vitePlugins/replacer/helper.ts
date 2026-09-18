@@ -4,9 +4,11 @@ import { LOOP_YIELD_SKIP_TAG } from './TagMarks.ts';
 import { minimatch } from 'minimatch';
 import yieldExcludesJson from './json/yieldExcludes.json' with { type: 'json' };
 import targetIdsJson from './json/targetIds.json' with { type: 'json'};
-import awaitTargetsJson from './json/awaitTargets.json' with { type: 'json' };
+import awaitTargetsJson from './json/targetAwait.json' with { type: 'json' };
 
 export type ErrorObj = { message: string; id?: string; loc?: { line: number; column: number } };
+export type EmitErrorWrapper = (errObj : ErrorObj) => void;
+export type ClearCache = () => void;
 
 /**
  * 指定したノードを囲んでいる最寄りの親関数ノードを返す

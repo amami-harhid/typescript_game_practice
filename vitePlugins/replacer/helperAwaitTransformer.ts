@@ -1,9 +1,9 @@
 import { JSDocTagInfo, Project, PropertyAccessExpression, Symbol, SyntaxKind } from 'ts-morph';
 import MagicString from 'magic-string';
-import awaitTargetsJson from './json/awaitTargets.json' with { type: 'json' };
+import awaitTargetsJson from './json/targetAwait.json' with { type: 'json' };
 import * as path from 'path';
 import * as TagMark from './TagMarks.ts';
-import type { ErrorObj } from './helper.ts';
+import type { ErrorObj, EmitErrorWrapper, ClearCache } from './helper.ts';
 
 export const getAwaitTargets = (): [string[], string[] ] => {
     const list:string[] = [];
@@ -17,7 +17,7 @@ export const getAwaitTargets = (): [string[], string[] ] => {
 
 const [_, awaitTargetFullMethods] = getAwaitTargets();
 
-// トランスフォーマーを呼び出すごとに新しくProjectを作る
+/** トランスフォーマーを呼び出すごとに新しくProjectを作る */ 
 function getOrInitProject(): Project {
 
     const project = new Project({
@@ -32,18 +32,17 @@ function getOrInitProject(): Project {
  * CallExpressionを探索し、Await付与のターゲットである場合に、
  * awaitがついていなければawaitをつけ、直接の親functionがasyncで
  * なければasyncにする(後続の置換トランスフォーマーエラー回避のため)
- * Await付与ターゲットはJSON(awaitTargets.json)に登録されている
- * ものとする。
+ * Await付与ターゲットはJSON(targetAwait.json)に定義されているものとする。
  * なお、このメソッドでは「MagicString」と「ts-morph」を使用している
- * @param code 
- * @param id 
+ * @param {string} code コード 
+ * @param {string} id ファイルパス 
+ * @param {CustomError} emitError 独自エラーメッセージ送信するメソッド
  * @returns 
  */
 export function awaitTransformer(
     code: string, 
     id: string, 
-    emitError: (errObj : ErrorObj) => void,
-    clearCache: () => void
+    emitError: EmitErrorWrapper,
 ): { code: string; map: any } {
 
     // プロジェクトの再作成をすることで キャッシュの衝突回避対応は不要です
@@ -118,14 +117,12 @@ export function awaitTransformer(
                                     const lineNo = callExpr.getStartLineNumber();
                                     // 列番号 = ノード全体の開始位置 - 行の開始位置 + 1 
                                     const columnNo = callExpr.getStart() - callExpr.getStartLinePos() + 1;
-                                    // 先にメモリを解放する(エラー表示後のホットリロード時に全コードの整合性を保つ)ために【A】【B】を行う
+                                    // 先にTS-Morphメモリを解放する(エラー表示後のホットリロード時に全コードの整合性を保つ)ために【A】【B】を行う
                                     // 【A】ts-morph のメモリ解放
                                     sourceFile.forget(); 
-                                    // 【B】Vite のモジュールキャッシュをクリア（次回1段目から実行させるため）
-                                    clearCache();
-                                    // エラーメッセージを表示する
+                                    // 【B】エラーメッセージを表示する
                                     const errObj : ErrorObj = {
-                                        message: 'async関数でないのでawaitを付与できません',
+                                        message: 'awaitを使うにはasync型の関数へと変更してください',
                                         id: id,
                                         loc: { line: lineNo, column: columnNo } // オプション: エラー箇所の行・列
                                     };

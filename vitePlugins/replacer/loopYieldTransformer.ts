@@ -1,5 +1,6 @@
 import * as ts from 'typescript';
 import * as helper from './helper.ts';
+import type { ErrorObj, EmitErrorWrapper, ClearCache } from './helper.ts';
 
 type Visit = (node: ts.Node, inLoop?: boolean) => ts.Node;
 
@@ -203,12 +204,19 @@ const transformIfBody = ( node: ts.Statement, visit: Visit): [boolean, ts.Statem
     return [false, node];
 }
 
-
+/**
+ * ループ処理ブロックの末尾にyield行を追加、break,continueの直前にyield行を追加する。
+ * yieldを追加するとき直近の親関数がAsyncGenerator関数でない場合はエラーにする。
+ * 
+ * @param {string} code コード 
+ * @param {string} id ファイルパス 
+ * @param {CustomError} emitError 独自エラーメッセージ送信するメソッド
+ * @returns 
+ */
 export const loopYieldTransformer = (
     id: string, 
     context: ts.TransformationContext,
-    error: (errObj: helper.ErrorObj)=>void,
-    clearCache: () => void
+    emitError: EmitErrorWrapper,
 ) => {
     return (rootNode: ts.SourceFile) => {
 
@@ -228,40 +236,34 @@ export const loopYieldTransformer = (
                 if(helper.isYieldExcluded(filePath)){
                     return ts.visitEachChild(node, (n) => visit(n, false), context);
                 }
-                // 親関数を取り出す。
-                let errorNode: ts.Node|undefined = undefined;
+                // エラーターゲットノードを取り出す(親関数がないときはループノード、あるときは親関数ノード)
+                let errorTargetNode: ts.Node|undefined = undefined;
                 const parent = helper.findParentFunction(node);
                 if( parent == undefined){
-                    errorNode = node; // ループのノード
+                    errorTargetNode = node; // ループのノード
                 }else if( !helper.isGenerator(parent) && !helper.isAsyncGenerator(parent)) {
-                    errorNode = parent; // 親関数
+                    errorTargetNode = parent; // 親関数
                 }
-                if(errorNode){
-                    const info = helper.getTsNodeLocation(errorNode);
-                    // 先にメモリを解放する(エラー表示後のホットリロード時に全コードの整合性を保つ)ためにキャッシュクリアを行う
-                    clearCache();
-                        const errObj: helper.ErrorObj = {
-                            message: 'Generator関数でない中でループにyieldを付与できません',
-                            id: id,
-                            loc: { line: info.line, column: info.column } // オプション: エラー箇所の行・列
-
-                        }
-                    error(errObj);
-
+                if(errorTargetNode){
+                    const info = helper.getTsNodeLocation(errorTargetNode);
+                    const errObj: ErrorObj = {
+                        message: 'Generator関数でない中でyieldを付与できません',
+                        id: id,
+                        loc: { line: info.line, column: info.column } // オプション: エラー箇所の行・列
+                    }
+                    emitError(errObj);
                 }
                 if(parent){
                     // 親関数が generator/asyncGeneratorでないときはエラーとする
                     if( !helper.isGenerator(parent) && !helper.isAsyncGenerator(parent)) {
                         const info = helper.getTsNodeLocation(parent);
-                        // 先にメモリを解放する(エラー表示後のホットリロード時に全コードの整合性を保つ)ためにキャッシュクリアを行う
-                        clearCache();
-                        const errObj: helper.ErrorObj = {
-                            message: 'Generator関数でないのでループにyieldを付与できません',
+                        const errObj: ErrorObj = {
+                            message: 'Generator関数でない中でyieldを付与できません',
                             id: id,
                             loc: { line: info.line, column: info.column } // オプション: エラー箇所の行・列
 
                         }
-                        error(errObj);
+                        emitError(errObj);
                     }
                 }
 
@@ -274,14 +276,18 @@ export const loopYieldTransformer = (
             // ループ内の if 文の検知
             // ループの中にある if文(thenブロック、elseブロック)にて
             // continue, break文があれば、yieldを付けてブロックを更新する
-            if (inLoop && ts.isIfStatement(node)) {
+            // inLoop==trueのときはループがGenerator関数内にあることを保証されているため
+            // Generator関数内に存在することをチェックしなくてもよい。
+            if (inLoop && ts.isIfStatement(node)) { // inLoop==true のときは ループ内にあることを示している
                 const _node = node as ts.IfStatement;
                 const newThen = transformIfBody(_node.thenStatement, (n) => visit(n, true));
                 if( _node.elseStatement) {
+                    // elseステートメントがあるとき
                     const newElse = transformIfBody(_node.elseStatement, (n) => visit(n, true));
                     const ifStatement = ts.factory.updateIfStatement(node, _node.expression, newThen[1], newElse[1]);
                     return ifStatement;
                 }else{
+                    // elseステートメントがないとき
                     const ifStatement = ts.factory.updateIfStatement(node, _node.expression, newThen[1], undefined);
                     return ifStatement;
                 }

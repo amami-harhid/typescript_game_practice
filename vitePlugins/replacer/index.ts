@@ -15,7 +15,7 @@ export function vitePluginAutoAwait(): Plugin {
 	/** ファイルパスごとの最終エラー時刻を記録するMap */
 	const lastErrorCache = new Map<string, number>();
 	return {
-		name: 'vite-plugin-auto-await',
+		name: 'vite-plugin-auto-replacing',
     	enforce: 'pre',
 		// メモリキャッシュに最新の修正コードがあればそれを返す仕組み
 		load(id) {
@@ -75,7 +75,7 @@ export function vitePluginAutoAwait(): Plugin {
 				return [];
 			}
 		},
-    	// 💡 プロジェクト起動時に tsconfig.json を読み込んで、型環境を完全に構築する
+    	// プロジェクト起動時に tsconfig.json を読み込んで、型環境を完全に構築する
     	buildStart() {
       		const configPath = ts.findConfigFile(process.cwd(), ts.sys.fileExists, 'tsconfig.json');
       		if (!configPath) {
@@ -98,8 +98,13 @@ export function vitePluginAutoAwait(): Plugin {
     	},
 	    transform(code, id) {
 			const [_id] = id.split('?');
-			/** キャッシュを強制クリアするヘルパー関数 */ 
-			const clearCache = () => {
+			/** 
+			 * キャッシュを強制クリアするヘルパー関数
+			 * TSコードを修正保存するときホットリロードされるが
+			 * 関連するファイル全てについて置換処理（１段目、２段目、３段目）のやり直しを
+			 * させたい。エラー発生したときにはキャッシュ強制クリアをペアで行うものとする
+			 */ 
+			const clearCache: helper.ClearCache = () => {
         		if (server) {
           			const moduleNode = server.moduleGraph.getModuleById(id);
           			if (moduleNode) {
@@ -108,8 +113,18 @@ export function vitePluginAutoAwait(): Plugin {
           			}
         		}
 			}
-			/** エラー発生時のラッパー関数 */ 
-    	  	const emitErrorWrapper = (errObj: helper.ErrorObj) => {
+			/**
+			 * エラー発生時のラッパー関数
+			 * Viteの開発サーバー（HMR）の二重ロード仕様によるエラーメッセージ２重呼出しを回避させる意図で
+			 * 用意したエラーラッパー関数です。
+			 * 
+			 * 開発時には「プリトランスパイル（Pre-transform）」と
+			 * 「実際のモジュール構築（Internal server/Bundle）」の２つのフェーズで
+			 * transformフックが呼び出されます。
+			 * そのため、２回連続でエラーが起こることになり少々目障り感があります。
+			 * 短い間隔でエラーが起きる場合は、２回目のエラー表示を無視するようにします。
+			 */ 
+    	  	const emitErrorWrapper: helper.EmitErrorWrapper = (errObj: helper.ErrorObj) => {
 				const now = Date.now();
 				const lastErrorTime = lastErrorCache.get(id) || 0;
 				// 前回のエラーから 500ms 以内の場合は、Viteの重複リクエストとみなして処理をスルーする
@@ -118,6 +133,7 @@ export function vitePluginAutoAwait(): Plugin {
 					// 2回目はビルドをクラッシュさせずに静かにプロセスを終了させます
 					return
 				}
+				clearCache();// エラー時には、キャッシュ強制クリアが必須です
 				// タイムスタンプを更新
 				lastErrorCache.set(id, now);
 				// 本物の Vite エラーを実行
@@ -136,7 +152,7 @@ export function vitePluginAutoAwait(): Plugin {
 			// ステップ２
 			// await 追加( + 必要に応じて親メソッド定義を async にする)
 			// (magicStringを使う)
-			const awaitTransformResult = helperAwait.awaitTransformer(asyncGeneratorTransformResult.code, _id, emitError, clearCache);
+			const awaitTransformResult = helperAwait.awaitTransformer(asyncGeneratorTransformResult.code, _id, emitError);
 			// ステップ３
 			// 繰り返しループの中に yieldをつける ( + 必要に応じて親メソッドを Generator関数にする )
 			// Typescriptの公式変換( 型情報は消えて、Javascript になる )
@@ -148,7 +164,7 @@ export function vitePluginAutoAwait(): Plugin {
 					// TypeScript 本来の構文変換の前に
 					// 自作の変換処理（トランスフォーマー）を実行させる
                 	before: [
-                        (context) => loopYieldTransformer(id, context, emitError, clearCache)
+                        (context) => loopYieldTransformer(id, context, emitError)
                     ]
                 }
 			});

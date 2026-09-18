@@ -4,66 +4,71 @@
  * そして表示する画像を切り替えるメソッドを用意する ( constume.next() )
  */
 
-import { Sprite } from '../../lib/sprite';
-import { Engine } from '../../lib/engine';
+//import { Sprite } from './lib/sprite';
+import { Engine } from './lib/engine';
 import Cat from '../../../assets/cat.svg';
-import { test2 } from './sub/threads';
+import { threadObj } from './sub/threads';
+import { CustomSprite } from './sub/customSprite';
 
-const sprite = new Sprite();
+
+const sprite = new CustomSprite();
 sprite.addImage(Cat);
+
+sprite.Thread.func = threadObj.thread;
 
 sprite.position.x = window.innerWidth/2;
 sprite.position.y = window.innerHeight/2;
 
 sprite.Control.wait(1);
 
+//sprite.Thread.func = sprite.thread;
 
-let muki = -1;
-const speed = 6;
-const test = function() {
-    return true;
-}
+// let muki = -1;
+// const speed = 6;
+// const test = function() {
+//     return true;
+// }
 
 
-const test3 = function (this:Sprite) {
+// const test3 = function (this:Sprite) {
 
-    this.degree = 20;
-        // ずっと繰り返す
-        for(;;){
+//     this.degree = 20;
+//         // ずっと繰り返す
+//         for(;;){
 
-            if(this.degree == 0){
-                continue;
-            }
-            if(this.degree == 90){
-                break;
-            }
-            this.Control.wait(2);
-            muki *= -1;
+//             if(this.degree == 0){
+//                 continue;
+//             }
+//             if(this.degree == 90){
+//                 break;
+//             }
+//             this.Control.wait(2);
+//             muki *= -1;
 
-        }
-    }
+//         }
+//     }
     
-sprite.Thread.func = test3;
-console.log(test());
+// sprite.Thread.func = test3;
+// console.log(test());
 
-sprite.Thread.func = function (this:Sprite){
-    this.degree = 15;
-    this.Control.wait(3);
-    // ずっと繰り返す
-    for(;;){
-        this.degree += speed * muki;
-        this.position.x += 1 * positionFlg;
-    }
-}
-let positionFlg = -1;
+// sprite.Thread.func = function (this:Sprite){
+//     this.degree = 15;
+//     this.Control.wait(3);
+//     // ずっと繰り返す
+//     for(;;){
+//         this.degree += speed * muki;
+//         this.position.x += 1 * positionFlg;
+//     }
+// }
+// let positionFlg = -1;
 
-sprite.Thread.func = () => {
-    for(;;){
-        (this as unknown  as Sprite).Control.wait(0.5);
-        positionFlg *= -1;
-    }
-}
+// sprite.Thread.func = () => {
+//     for(;;){
+//         (this as unknown  as Sprite).Control.wait(0.5);
+//         positionFlg *= -1;
+//     }
+// }
 
-sprite.Thread.func = test2
+// sprite.Thread.func = test2
 
 Engine.run();

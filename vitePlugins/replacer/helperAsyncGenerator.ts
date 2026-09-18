@@ -93,14 +93,14 @@ const arrowToAsyncGenerator = (expr: Expression<ts.Expression>): boolean => {
 }
 
 /**
- * CallExpressionを探索し、Await付与のターゲットである場合に、
- * awaitがついていなければawaitをつけ、直接の親functionがasyncで
- * なければasyncにする(後続の置換トランスフォーマーエラー回避のため)
- * Await付与ターゲットはJSON(awaitTargets.json)に登録されている
- * ものとする。
+ * スレッドのセッターを探索して、セッターに代入している関数を AsyncGenerator関数に置換する。
+ * セッターへ関数を代入している場合はその関数を置換、セッターへ変数を代入している場合は
+ * その変数の宣言を探索し、変数へ代入している関数を置換する。
+ * なお変数の宣言の探索はimport先(別のコードファイル)まで追跡して置換する。
+ * スレッドセッターの探索方法はJSON(targetThreadSetter.json)に登録されているものとする。
  * なお、このメソッドでは「MagicString」と「ts-morph」を使用している
- * @param code 
- * @param id 
+ * @param {string} code コード 
+ * @param {string} id ファイルパス 
  * @returns 
  */
 export function asyncGeneratorTransformer(code: string, id: string ): { code: string; map: any } {
@@ -123,6 +123,7 @@ export function asyncGeneratorTransformer(code: string, id: string ): { code: st
                 // 特定のパターン（末尾が .Thread.func）にマッチするか確認
                 const words = leftText.replace(/^.+\.(.+\..+)$/, "$1");
                 if (targetThreadSetter.targets.includes(words)) {
+                    //console.log(words)
                     const children = leftExpression.getChildren();
                     const func = children[children.length-1]; // xxx.Thread.func のときに 最後のNode(=func)を取り出す
                     // func.getKind() --> 80 --> SyntaxKind.Identifier
@@ -132,17 +133,23 @@ export function asyncGeneratorTransformer(code: string, id: string ): { code: st
                             const propertyAccessExp = setterNode as PropertyAccessExpression;
                             const symbol = propertyAccessExp.getSymbol();
                             if(symbol){
+                                //console.log('symbol=', symbol)
                                 const declarations = symbol.getDeclarations();
                                 const setterDeclaration = declarations.find(Node.isSetAccessorDeclaration);
                                 if (setterDeclaration) {
+                                    //console.log(setterDeclaration)
                                     const jsDocs = setterDeclaration.getJsDocs();
+                                    //console.log('jsDocs length=', jsDocs.length)
                                     const match = jsDocs.some((jsDoc)=>{
                                         const jsDocText = jsDoc.getText();
+                                        //console.log('jsDocText =', jsDocText )
                                         if(jsDocText.includes( TagMark.THREAD_SETTER_TAG )) {
+                                            //console.log(TagMark.THREAD_SETTER_TAG)
                                             return true;
                                         }
                                     });
                                     if(match) {
+                                        //console.log('Start replaceRightExpression')
                                         hasChanged = replaceRightExpression(rightExpression, sourceFile);
                                     }
                                 }
@@ -187,6 +194,177 @@ export function asyncGeneratorTransformer(code: string, id: string ): { code: st
 
 const replaceRightExpression = (rightExpression: Expression<ts.Expression>, sourceFile: SourceFile) => {
     let hasChanged = false;
+    // 右側が『PropertyAccessExpression』のとき
+    // クラスインスタンスメソッドまたはリテラルオブジェクトのメソッドの場合が想定される
+    if (rightExpression.getKind() === SyntaxKind.PropertyAccessExpression){
+        const rightPropertyAccess = rightExpression.asKindOrThrow(SyntaxKind.PropertyAccessExpression);
+
+        // xxx.Thread.func = sprite.thread; // 右側はクラスインスタンスのメソッド
+        // このとき rightPropertyAccess.getText() ===> "sprite.thread"
+        
+        //const code = rightPropertyAccess.getText();
+        //console.log('code=', code);
+        //const def = rightPropertyAccess.getLastChild();
+        //console.log(def?.getText());
+        //const nameNode = rightPropertyAccess.getNameNode();
+        //console.log("アクセスしているプロパティ名:", nameNode.getText());
+        
+        const symbol = rightPropertyAccess.getNameNode().getSymbol();
+        if (symbol) {
+            // そのシンボルが定義されている元の宣言（Node）を取得
+            const declarations = symbol.getDeclarations();
+
+            // クラスの MethodDeclaration (メソッド宣言) が見つかる
+            const methodDecl = declarations.find(d => d.getKind() === SyntaxKind.MethodDeclaration);
+            const propertyDecl = declarations.find(d => d.getKind() === SyntaxKind.PropertyAssignment);
+            if (methodDecl && methodDecl.getKind() == SyntaxKind.MethodDeclaration) {
+                
+                const targetFile = methodDecl.getSourceFile();
+                let isSameSourceFile = true;
+                if(targetFile != sourceFile) {
+                    // 宣言が別ファイルのとき
+                    isSameSourceFile = false;
+                }
+                
+                const _method = methodDecl.asKindOrThrow(SyntaxKind.MethodDeclaration)
+                //console.log("目的のメソッド宣言を取得しました！:", _method.getText());
+                
+                if(!(_method.isAsync() && _method.isGenerator())) {
+                    // Async & Generatorでないとき
+                    if(!isSameSourceFile){
+                        //console.log('別ファイル')
+                        const bodyText = _method.getBody()?.getText();
+                        const paramsText = _method.getParameters().map(p => p.getText()).join(', ');
+                        const methodName = _method.getName();
+                        const _methodName = (methodName)? methodName: '';
+                        _method.replaceWithText(`async *${_methodName} (${paramsText}) ${bodyText}`);
+                        const replacedId = targetFile.getFilePath()
+                        const replacedCode = targetFile.getText();
+                        Cache.MemoryCache.set(replacedId, replacedCode);
+                        targetFile.forget(); // 読み込み直し
+                    }else{
+                        //console.log('同一ファイルだよ')
+                        const start = _method.getStart();
+                        const _methodCode = _method.getText();
+                        //console.log('_methodCode=', _methodCode)
+                        const end = _methodCode.indexOf('(');
+                        const name = _method.getName();
+                        //console.log('end=',end)
+                        replacements.push({
+                            start: start,
+                            end: start + end, // "function" の長さ
+                            text: `async *${name}`
+                        });
+                        hasChanged = true;
+                    }
+                }
+            }else if (propertyDecl && propertyDecl.getKind()==SyntaxKind.PropertyAssignment) {
+
+                const targetFile = propertyDecl.getSourceFile();
+                let isSameSourceFile = true;
+                if(targetFile != sourceFile) {
+                    // 宣言が別ファイルのとき
+                    isSameSourceFile = false;
+                }
+
+                const _propertyAssgnment = propertyDecl.asKindOrThrow(SyntaxKind.PropertyAssignment)
+                //console.log("目的のメソッド宣言を取得しました！:", _propertyAssgnment.getText());
+                //const name = _propertyAssgnment.getName();
+                //console.log('name= ', name)
+                const right = _propertyAssgnment.getLastChild();
+                if(right && right.getKind()=== SyntaxKind.FunctionExpression){
+                    //console.log('right=', right.getText());
+                    const _func = right.asKindOrThrow(SyntaxKind.FunctionExpression);
+                    //console.log(_func)
+                    if(_func){
+                        if(!(_func.isAsync() && _func.isGenerator())) {
+                            const _start = _func.getStart();
+                            const _methodCode = _func.getText();
+                            const _functionName = _func.getName();
+                            const __functionName = (_functionName)? _functionName: ''; 
+                            const end = _methodCode.indexOf('(');
+                            replacements.push({
+                                start: _start,
+                                end: _start + end, // "function" の長さ
+                                text: `async ${__functionName} function* `
+                            });
+                            hasChanged = true;
+                        }
+                    }
+                }else if(right && right.getKind()=== SyntaxKind.ArrowFunction){
+                    const func = right.asKindOrThrow(SyntaxKind.ArrowFunction);
+                    if(isSameSourceFile) {
+                        //console.log('右側がアロー')
+                        //console.log('_func.isAsync()=', func.isAsync())
+                        const bodyText = func.getBody().getText();
+                        const paramsText = func.getParameters().map(p => p.getText()).join(', ');
+                        const arrowStart = func.getStart();
+                        const arrowEnd = func.getEnd();
+                        //console.log('arrowStart, arrowEnd=', arrowStart, arrowEnd)
+
+                        // アロー関数を async function* () {} の文字列に置き換える
+                        const arrowFuncCode = `async function* (${paramsText}) ${bodyText}`;
+                        //console.log('arrow code=\n',arrowFuncCode)
+                        replacements.push({
+                                start: arrowStart,
+                                end: arrowEnd, //arrowEnd, 
+                                text: arrowFuncCode
+                            });
+                        hasChanged = true;
+                    }else{
+                        // 他のファイルのとき
+                        const bodyText = func.getBody().getText();
+                        const paramsText = func.getParameters().map(p => p.getText()).join(', ');
+                        func.replaceWithText(`async function* (${paramsText}) ${bodyText}`);
+                        const replacedId = targetFile.getFilePath()
+                        const replacedCode = targetFile.getText();
+                        //console.log('replacedCode=', replacedCode);
+                        Cache.MemoryCache.set(replacedId, replacedCode);
+                        targetFile.forget(); // 読み込み直し                        
+                    }
+
+
+                }
+
+                // const targetFile = _method.getSourceFile();
+                // if(!(_method.isAsync() && _method.isGenerator())) {
+                //     // Async & Generatorでないとき
+                //     let isSameSourceFile = true;
+                //     if(targetFile != sourceFile) {
+                //         // 宣言が別ファイルのとき
+                //         isSameSourceFile = false;
+                //     }
+                //     if(!isSameSourceFile){
+                //         console.log('別ファイル')
+                //         const bodyText = _method.getBody()?.getText();
+                //         const paramsText = _method.getParameters().map(p => p.getText()).join(', ');
+                //         const methodName = _method.getName();
+                //         _method.replaceWithText(`async *${methodName} (${paramsText}) ${bodyText}`);
+                //             const replacedId = targetFile.getFilePath()
+                //         const replacedCode = targetFile.getText();
+                //         Cache.MemoryCache.set(replacedId, replacedCode);
+                //         targetFile.forget(); // 読み込み直し
+                //     }else{
+                //         console.log('同一ファイルだよ')
+                //         const start = _method.getStart();
+                //         const _methodCode = _method.getText();
+                //         console.log('_methodCode=', _methodCode)
+                //         const end = _methodCode.indexOf('(');
+                //         const name = _method.getName();
+                //         console.log('end=',end)
+                //         replacements.push({
+                //             start: start,
+                //             end: start + end, // "function" の長さ
+                //             text: `async *${name}`
+                //         });
+                //         hasChanged = true;
+                //     }
+                // }
+            }
+            
+
+        }
+    }
     if (rightExpression.getKind() === SyntaxKind.Identifier) {
         // セッターに変数（関数）を代入しているとき
         const rightIdentifier = rightExpression.asKindOrThrow(SyntaxKind.Identifier);
@@ -201,15 +379,20 @@ const replaceRightExpression = (rightExpression: Expression<ts.Expression>, sour
                 // 宣言が別ファイルのとき
                 isSameSourceFile = false;
             }
-            // 宣言が別ファイルでないとき
+            //console.log('declarationNode.getText()=', declarationNode.getText())
+            //console.log('declarationNode.getKind()=', declarationNode.getKind());
+            
             // 変数宣言（const XXX = ...）であるか確認
             if (declarationNode.getKind() === SyntaxKind.VariableDeclaration) {
                 const variableDeclarator = declarationNode.asKindOrThrow(SyntaxKind.VariableDeclaration);
                 const initializer = variableDeclarator.getInitializer();
                 if(initializer){
+                    //console.log(SyntaxKind.MethodDeclaration)
                     // 通常の関数式 (function() {}) の場合
                     if (initializer.getKind() === SyntaxKind.FunctionExpression) {
+                        // 宣言が別ファイルのとき
                         if(!isSameSourceFile){
+                            //console.log('別ファイルで 置換')
                             const func = initializer.asKindOrThrow(SyntaxKind.FunctionExpression);
                             const bodyText = func.getBody().getText();
                             const paramsText = func.getParameters().map(p => p.getText()).join(', ');
@@ -219,6 +402,7 @@ const replaceRightExpression = (rightExpression: Expression<ts.Expression>, sour
                             Cache.MemoryCache.set(replacedId, replacedCode);
                             targetFile.forget(); // 読み込み直し
                         }else{
+                            //console.log('同一ファイルで funcToAsyncGenerator')
                             hasChanged = funcToAsyncGenerator(initializer);
                         }
                     } else if (initializer.getKind() === SyntaxKind.ArrowFunction) {
