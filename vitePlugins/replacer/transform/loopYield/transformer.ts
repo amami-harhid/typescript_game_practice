@@ -1,6 +1,6 @@
 import * as ts from 'typescript';
-import * as helper from './helper.ts';
-import type { ErrorObj, EmitErrorWrapper, ClearCache } from './helper.ts';
+import * as helper from '../../helper.ts';
+import type { ErrorObj, EmitErrorWrapper } from '../../helper.ts';
 
 type Visit = (node: ts.Node, inLoop?: boolean) => ts.Node;
 
@@ -213,7 +213,7 @@ const transformIfBody = ( node: ts.Statement, visit: Visit): [boolean, ts.Statem
  * @param {CustomError} emitError 独自エラーメッセージ送信するメソッド
  * @returns 
  */
-export const loopYieldTransformer = (
+export const transform = (
     id: string, 
     context: ts.TransformationContext,
     emitError: EmitErrorWrapper,

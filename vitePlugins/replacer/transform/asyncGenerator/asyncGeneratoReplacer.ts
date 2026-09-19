@@ -1,7 +1,7 @@
 import * as ts from 'typescript';
 import { Expression, SyntaxKind, SourceFile, MethodDeclaration, FunctionExpression, ArrowFunction } from 'ts-morph';
-import * as Cache from './memoryCache.ts';
-import { EmitErrorWrapper, ErrorObj } from './helper.ts';
+import * as Cache from '../../memoryCache.ts';
+import { EmitErrorWrapper, ErrorObj } from '../../helper.ts';
 
 /**
  * 置換位置を記録するための配列

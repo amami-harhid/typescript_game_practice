@@ -1,14 +1,14 @@
 import * as ts from 'typescript';
-import type { Plugin, ViteDevServer  } from 'vite';
+import type { Plugin, ViteDevServer } from 'vite';
 import * as path from 'path';
 import remapping from '@ampproject/remapping';
 import fs from 'fs'; 
 
-import * as helper from './helper.ts';
-import * as helperAwait from './helperAwaitTransformer.ts';
-import * as helperAsyncGenerator from './helperAsyncGenerator.ts'
 import * as Cache from './memoryCache.ts';
-import { loopYieldTransformer } from './loopYieldTransformer.ts';
+import * as helper from './helper.ts';
+import * as AsyncGenerator from './transform/asyncGenerator/transformer.ts'
+import * as Await from './transform/await/transformer.ts';
+import * as LoopYield from './transform/loopYield/transformer.ts';
 
 export function vitePluginAutoAwait(): Plugin {
 	let compilerOptions: ts.CompilerOptions = {};
@@ -214,7 +214,7 @@ export function vitePluginAutoAwait(): Plugin {
 			const emitError = emitErrorWrapper.bind(this);
 			// ステップ１
 			// async generator化
-			const asyncGeneratorTransformResult = helperAsyncGenerator.asyncGeneratorTransformer(code,_id, emitError);
+			const asyncGeneratorTransformResult = AsyncGenerator.transform(code,_id, emitError);
 			//console.log('asyncGeneratorTransformResult##################')
 			//console.log(asyncGeneratorTransformResult.code)
 			
@@ -224,7 +224,7 @@ export function vitePluginAutoAwait(): Plugin {
 			// ステップ２
 			// await 追加( + 必要に応じて親メソッド定義を async にする)
 			// (magicStringを使う)
-			const awaitTransformResult = helperAwait.awaitTransformer(asyncGeneratorTransformResult.code, _id, emitError);
+			const awaitTransformResult = Await.transform(asyncGeneratorTransformResult.code, _id, emitError);
 			//console.log('awaitTransformResult##################')
 			//console.log(awaitTransformResult.code)
 			
@@ -239,7 +239,7 @@ export function vitePluginAutoAwait(): Plugin {
 					// TypeScript 本来の構文変換の前に
 					// 自作の変換処理（トランスフォーマー）を実行させる
                 	before: [
-                        (context) => loopYieldTransformer(id, context, emitError)
+                        (context) => LoopYield.transform(id, context, emitError)
                     ]
                 }
 			});

@@ -1,9 +1,9 @@
 import { JSDocTagInfo, Project, PropertyAccessExpression, Symbol, SyntaxKind } from 'ts-morph';
 import MagicString from 'magic-string';
-import awaitTargetsJson from './json/targetAwait.json' with { type: 'json' };
+import awaitTargetsJson from '../../json/targetAwait.json' with { type: 'json' };
 import * as path from 'path';
-import * as TagMark from './TagMarks.ts';
-import type { ErrorObj, EmitErrorWrapper, ClearCache } from './helper.ts';
+import * as TagMark from '../../TagMarks.ts';
+import type { ErrorObj, EmitErrorWrapper } from '../../helper.ts';
 
 export const getAwaitTargets = (): [string[], string[] ] => {
     const list:string[] = [];
@@ -40,7 +40,7 @@ function getOrInitProject(): Project {
  * 
  * @returns 
  */
-export function awaitTransformer(
+export function transform(
     code: string, 
     id: string, 
     emitError: EmitErrorWrapper,
