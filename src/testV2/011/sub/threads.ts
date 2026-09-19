@@ -55,7 +55,7 @@ export const threadObj = {
      * スレッドへ代入すると asyncGeneratorに変わる
      * @param this 
      */
-    thread4: function(this: CustomSprite) {
+    thread4: async function*(this: CustomSprite) {
         for(;;){
             //console.log('abcdefg');
             this.Control.wait(1);

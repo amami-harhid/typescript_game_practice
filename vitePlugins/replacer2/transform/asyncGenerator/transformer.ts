@@ -19,7 +19,6 @@ import * as TagMark from '../../TagMarks.ts';
 import { EmitErrorWrapper } from '../../helper.ts';
 import * as REPLACER from './asyncGeneratoReplacer.ts';
 import * as RightExpression from './asyncGeneratorRightExpression.ts'
-import { tracer } from './tracer.ts';
 
 // トランスフォーマーを呼び出すごとに新しくProjectを作る
 function getOrInitProject(): Project {

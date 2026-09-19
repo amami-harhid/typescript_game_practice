@@ -17,8 +17,12 @@ console.log(obj);
 
 const sprite = new Sprite();
 
-const b = obj.test;
+// const b = obj.test;
 
-const a = b
+// const a = b
 
-sprite.Thread.func = a
+// sprite.Thread.func = a
+
+sprite.Thread.func = function() {
+    // test
+}
