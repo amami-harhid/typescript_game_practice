@@ -70,6 +70,11 @@ export function transform(code: string, id: string ): void {
             const _node = node.asKindOrThrow(SyntaxKind.ArrowFunction);
             console.log(`${text}: path = `, _node.getSourceFile().getFilePath());            
             console.log(`${text}: text = `, _node.getText());
+        }else
+        if (node.getKind() === SyntaxKind.MethodDeclaration) {
+            const _node = node.asKindOrThrow(SyntaxKind.MethodDeclaration);
+            console.log(`${text}: path = `, _node.getSourceFile().getFilePath());            
+            console.log(`${text}: text = `, _node.getText());
         }
 
     }

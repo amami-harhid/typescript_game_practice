@@ -16,7 +16,7 @@ export const test2 = async function(this:Sprite) {
         this.Control.wait(20);
     }
 }
-const test = async function*(this: CustomSprite) {
+export const test = async function*(this: CustomSprite) {
         for(;;){
             console.log('xxxxxx');
             this.Control.wait(1);
@@ -63,3 +63,19 @@ export const threadObj = {
     },
 
 }
+
+export class Tester {
+    static threadS() {
+        console.log('static thread');
+    }
+    thread() {
+        console.log('thread');
+    }
+}
+
+const test_2 = () => {
+
+    console.log('test2');
+}
+
+export {test_2}
