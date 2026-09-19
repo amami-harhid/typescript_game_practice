@@ -7,13 +7,13 @@ class CustomSprite extends Sprite {
         //this.Thread.func = this.thread;
     }
 
-    async *thread () {
-        let idx = 0;
-        for(;;) {
-            console.log('====='+ (++idx))
-            this.Control.wait(1.0);
-        }
-    }
+    // async *thread () {
+    //     let idx = 0;
+    //     for(;;) {
+    //         console.log('====='+ (++idx))
+    //         this.Control.wait(1.0);
+    //     }
+    // }
 
 }
 

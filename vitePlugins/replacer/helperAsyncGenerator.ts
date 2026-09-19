@@ -12,12 +12,13 @@
  * ありますが、それも上記の例のように replaceWithText で簡単に対応可能です。
  */
 import * as ts from 'typescript';
-import { Node, Expression, Project, SyntaxKind, PropertyAccessExpression, SourceFile } from 'ts-morph';
+import { Node, Expression, Project, SyntaxKind, PropertyAccessExpression, SourceFile, ArrowFunction } from 'ts-morph';
 import MagicString from 'magic-string';
 import * as path from 'path';
-import * as Cache from './memoryCache.ts';
 import targetThreadSetter from './json/targetThreadSetter.json' with { type: 'json' };
 import * as TagMark from './TagMarks.ts';
+import { EmitErrorWrapper } from './helper.ts';
+import * as REPLACER from './helperAsyncGeneratoReplacer.ts';
 
 // トランスフォーマーを呼び出すごとに新しくProjectを作る
 function getOrInitProject(): Project {
@@ -30,68 +31,6 @@ function getOrInitProject(): Project {
     return project;
 }
 
-// 置換位置を記録するための配列
-const replacements: { start: number; end: number; text: string }[] = [];
-
-/**
- * function を async function* とする
- * 置換結果はMagicStringへ書き込む
- * @param expr 
- * @returns 
- */
-const funcToAsyncGenerator = (expr: Expression<ts.Expression>): boolean => {
-    let hasChanged = false;
-    const funcExpr = expr.asKindOrThrow(SyntaxKind.FunctionExpression);
-    if (!funcExpr.isAsync() && !funcExpr.isGenerator()) {
-        // async 属性を true に書き換える
-        const start = funcExpr.getStart();
-        replacements.push({
-            start: start,
-            end: start + 8, // "function" の長さ
-            text: 'async function*'
-        });
-        hasChanged = true;
-    }else if(!funcExpr.isAsync()) {
-        const start = funcExpr.getStart();
-        replacements.push({
-            start: start,
-            end: start + 8, // "function" の長さ
-            text: 'async function'
-        });
-        hasChanged = true;
-    }else if(!funcExpr.isGenerator()) {
-        const start = funcExpr.getStart();
-        replacements.push({
-            start: start,
-            end: start + 8, // "function" の長さ
-            text: 'function*'
-        });
-        hasChanged = true;    
-    }
-    return hasChanged;
-}
-/**
- * アロー関数を async function* へと置換する
- * @param expr 
- * @returns 
- */
-const arrowToAsyncGenerator = (expr: Expression<ts.Expression>): boolean => {
-    const arrowFunc = expr.asKindOrThrow(SyntaxKind.ArrowFunction);
-    const bodyText = arrowFunc.getBody().getText();
-    const paramsText = arrowFunc.getParameters().map(p => p.getText()).join(', ');
-    const start = arrowFunc.getStart();
-    const end = arrowFunc.getEnd();
-
-    // アロー関数を async function* () {} の文字列に置き換える
-    const code = `async function* (${paramsText}) ${bodyText}`;
-    replacements.push({
-        start: start,
-        end: end, // "function" の長さ
-        text:  code
-    });
-    return true;
-}
-
 /**
  * スレッドのセッターを探索して、セッターに代入している関数を AsyncGenerator関数に置換する。
  * セッターへ関数を代入している場合はその関数を置換、セッターへ変数を代入している場合は
@@ -101,17 +40,19 @@ const arrowToAsyncGenerator = (expr: Expression<ts.Expression>): boolean => {
  * なお、このメソッドでは「MagicString」と「ts-morph」を使用している
  * @param {string} code コード 
  * @param {string} id ファイルパス 
+ * @param {EmitErrorWrapper} emitError 独自エラーメッセージ送信するメソッド
  * @returns 
  */
-export function asyncGeneratorTransformer(code: string, id: string ): { code: string; map: any } {
+export function asyncGeneratorTransformer(code: string, id: string, emitError: EmitErrorWrapper ): { code: string; map: any, forceError: boolean } {
     const magicString = new MagicString(code)
     const currentProject = getOrInitProject();
     const sourceFile = currentProject.createSourceFile(id, code, { overwrite: true });
-    replacements.splice(0, replacements.length); // 配列要素をゼロ個にする
+    REPLACER.replacements.splice(0, REPLACER.replacements.length); // 配列要素をゼロ個にする
     let hasChanged = false;
+    let forceError = false;
     // 代入式（PropertyAccessExpression = Identifier）を走査
     const assignments = sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression);
-    for(const assignment of assignments){
+    for(const assignment of assignments){ //【A】assignmentsループ
         // `=` 演算子であることを確認
         if (assignment.getOperatorToken().getKind() == SyntaxKind.EqualsToken) {
             const leftExpression = assignment.getLeft();
@@ -126,31 +67,35 @@ export function asyncGeneratorTransformer(code: string, id: string ): { code: st
                     //console.log(words)
                     const children = leftExpression.getChildren();
                     const func = children[children.length-1]; // xxx.Thread.func のときに 最後のNode(=func)を取り出す
-                    // func.getKind() --> 80 --> SyntaxKind.Identifier
-                    if(func.getKind() == SyntaxKind.Identifier) {
+                    if(func.getKind() == SyntaxKind.Identifier /* (80) */) {  
                         const setterNode = func.getParent();
                         if( Node.isPropertyAccessExpression(setterNode)) {
                             const propertyAccessExp = setterNode as PropertyAccessExpression;
+                            // セッターの左側のJSDOCを探索し、条件に合致するときは
+                            // セッターの右側を探索して置換処理をする。
                             const symbol = propertyAccessExp.getSymbol();
                             if(symbol){
-                                //console.log('symbol=', symbol)
                                 const declarations = symbol.getDeclarations();
                                 const setterDeclaration = declarations.find(Node.isSetAccessorDeclaration);
                                 if (setterDeclaration) {
-                                    //console.log(setterDeclaration)
                                     const jsDocs = setterDeclaration.getJsDocs();
-                                    //console.log('jsDocs length=', jsDocs.length)
                                     const match = jsDocs.some((jsDoc)=>{
                                         const jsDocText = jsDoc.getText();
-                                        //console.log('jsDocText =', jsDocText )
                                         if(jsDocText.includes( TagMark.THREAD_SETTER_TAG )) {
-                                            //console.log(TagMark.THREAD_SETTER_TAG)
                                             return true;
                                         }
                                     });
                                     if(match) {
-                                        //console.log('Start replaceRightExpression')
-                                        hasChanged = replaceRightExpression(rightExpression, sourceFile);
+                                        // TagMark.THREAD_SETTER_TAGがJSDOCに書かれている場合
+                                        // セッターに代入している方を探索して置換処理をする
+                                        const rightRslt = replaceRightExpression(id, rightExpression, sourceFile, emitError);
+                                        hasChanged = rightRslt.hasChanged;
+                                        if(rightRslt.forceError && rightRslt.forceError === true){
+                                            forceError = rightRslt.forceError;
+                                            // 【A】assignmentsループを抜ける
+                                            //console.log('【A】assignmentsループを抜ける')
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -163,7 +108,7 @@ export function asyncGeneratorTransformer(code: string, id: string ): { code: st
 
     // magic-string を使って、安全に一括置換を行う
     //console.log('replacements=', replacements)
-    for (const r of replacements) {
+    for (const r of REPLACER.replacements) {
         magicString.overwrite(r.start, r.end, r.text);
     }
     const finalCode = magicString.toString();
@@ -181,6 +126,7 @@ export function asyncGeneratorTransformer(code: string, id: string ): { code: st
         return {
             code : finalCode,
             map: map,
+            forceError: forceError
         };
     }
     // メモリ解放のためにソースファイルを削除
@@ -189,26 +135,25 @@ export function asyncGeneratorTransformer(code: string, id: string ): { code: st
     return {
         code: finalCode,
         map: map,
+        forceError: forceError
     }
 }
 
-const replaceRightExpression = (rightExpression: Expression<ts.Expression>, sourceFile: SourceFile) => {
+/**
+ * 左側の置換処理
+ * @param {string} id 対象ファイルのパス
+ * @param {Expression<ts.Expression>} rightExpression 左部のExpression 
+ * @param {SourceFile} sourceFile 
+ * @param {EmitErrorWrapper} emitError 
+ * @returns 
+ */
+const replaceRightExpression = (id:string, rightExpression: Expression<ts.Expression>, sourceFile: SourceFile, emitError: EmitErrorWrapper): {hasChanged:boolean, forceError?: boolean} => {
     let hasChanged = false;
     // 右側が『PropertyAccessExpression』のとき
     // クラスインスタンスメソッドまたはリテラルオブジェクトのメソッドの場合が想定される
     if (rightExpression.getKind() === SyntaxKind.PropertyAccessExpression){
         const rightPropertyAccess = rightExpression.asKindOrThrow(SyntaxKind.PropertyAccessExpression);
 
-        // xxx.Thread.func = sprite.thread; // 右側はクラスインスタンスのメソッド
-        // このとき rightPropertyAccess.getText() ===> "sprite.thread"
-        
-        //const code = rightPropertyAccess.getText();
-        //console.log('code=', code);
-        //const def = rightPropertyAccess.getLastChild();
-        //console.log(def?.getText());
-        //const nameNode = rightPropertyAccess.getNameNode();
-        //console.log("アクセスしているプロパティ名:", nameNode.getText());
-        
         const symbol = rightPropertyAccess.getNameNode().getSymbol();
         if (symbol) {
             // そのシンボルが定義されている元の宣言（Node）を取得
@@ -217,6 +162,8 @@ const replaceRightExpression = (rightExpression: Expression<ts.Expression>, sour
             // クラスの MethodDeclaration (メソッド宣言) が見つかる
             const methodDecl = declarations.find(d => d.getKind() === SyntaxKind.MethodDeclaration);
             const propertyDecl = declarations.find(d => d.getKind() === SyntaxKind.PropertyAssignment);
+
+            // メソッドのとき ( Arrow関数の考慮は不要 )
             if (methodDecl && methodDecl.getKind() == SyntaxKind.MethodDeclaration) {
                 
                 const targetFile = methodDecl.getSourceFile();
@@ -226,39 +173,22 @@ const replaceRightExpression = (rightExpression: Expression<ts.Expression>, sour
                     isSameSourceFile = false;
                 }
                 
+                
                 const _method = methodDecl.asKindOrThrow(SyntaxKind.MethodDeclaration)
-                //console.log("目的のメソッド宣言を取得しました！:", _method.getText());
                 
                 if(!(_method.isAsync() && _method.isGenerator())) {
                     // Async & Generatorでないとき
                     if(!isSameSourceFile){
                         //console.log('別ファイル')
-                        const bodyText = _method.getBody()?.getText();
-                        const paramsText = _method.getParameters().map(p => p.getText()).join(', ');
-                        const methodName = _method.getName();
-                        const _methodName = (methodName)? methodName: '';
-                        _method.replaceWithText(`async *${_methodName} (${paramsText}) ${bodyText}`);
-                        const replacedId = targetFile.getFilePath()
-                        const replacedCode = targetFile.getText();
-                        Cache.MemoryCache.set(replacedId, replacedCode);
-                        targetFile.forget(); // 読み込み直し
+                        REPLACER.methodToAsyncGeneratorAnotherFile(_method, targetFile);
                     }else{
-                        //console.log('同一ファイルだよ')
-                        const start = _method.getStart();
-                        const _methodCode = _method.getText();
-                        //console.log('_methodCode=', _methodCode)
-                        const end = _methodCode.indexOf('(');
-                        const name = _method.getName();
-                        //console.log('end=',end)
-                        replacements.push({
-                            start: start,
-                            end: start + end, // "function" の長さ
-                            text: `async *${name}`
-                        });
+                        REPLACER.methodToAsyncGenerator(_method);
                         hasChanged = true;
                     }
                 }
-            }else if (propertyDecl && propertyDecl.getKind()==SyntaxKind.PropertyAssignment) {
+            }else 
+            // リテラルオブジェクトのとき ( Arrow関数をかけるので Arrow関数の考慮が必要 )
+            if (propertyDecl && propertyDecl.getKind()==SyntaxKind.PropertyAssignment) {
 
                 const targetFile = propertyDecl.getSourceFile();
                 let isSameSourceFile = true;
@@ -268,103 +198,42 @@ const replaceRightExpression = (rightExpression: Expression<ts.Expression>, sour
                 }
 
                 const _propertyAssgnment = propertyDecl.asKindOrThrow(SyntaxKind.PropertyAssignment)
-                //console.log("目的のメソッド宣言を取得しました！:", _propertyAssgnment.getText());
-                //const name = _propertyAssgnment.getName();
-                //console.log('name= ', name)
                 const right = _propertyAssgnment.getLastChild();
+
+                // Functionの場合
                 if(right && right.getKind()=== SyntaxKind.FunctionExpression){
-                    //console.log('right=', right.getText());
                     const _func = right.asKindOrThrow(SyntaxKind.FunctionExpression);
-                    //console.log(_func)
                     if(_func){
-                        if(!(_func.isAsync() && _func.isGenerator())) {
-                            const _start = _func.getStart();
-                            const _methodCode = _func.getText();
-                            const _functionName = _func.getName();
-                            const __functionName = (_functionName)? _functionName: ''; 
-                            const end = _methodCode.indexOf('(');
-                            replacements.push({
-                                start: _start,
-                                end: _start + end, // "function" の長さ
-                                text: `async ${__functionName} function* `
-                            });
+                        if(isSameSourceFile) {
+                            hasChanged = REPLACER.funcToAsyncGenerator(_func);
                             hasChanged = true;
+
+                        }else{
+                            REPLACER.funcToAsyncGeneratorAnotherFile(_func, targetFile);
                         }
                     }
-                }else if(right && right.getKind()=== SyntaxKind.ArrowFunction){
+                }else 
+                // アロー関数の場合    
+                if(right && right.getKind()=== SyntaxKind.ArrowFunction){
+
+                    // アロー関数はスレッド化には不適なのでエラーとする
                     const func = right.asKindOrThrow(SyntaxKind.ArrowFunction);
                     if(isSameSourceFile) {
-                        //console.log('右側がアロー')
-                        //console.log('_func.isAsync()=', func.isAsync())
-                        const bodyText = func.getBody().getText();
-                        const paramsText = func.getParameters().map(p => p.getText()).join(', ');
-                        const arrowStart = func.getStart();
-                        const arrowEnd = func.getEnd();
-                        //console.log('arrowStart, arrowEnd=', arrowStart, arrowEnd)
+                        REPLACER.arrowFuncErrorAction(id, func, sourceFile, emitError);
 
-                        // アロー関数を async function* () {} の文字列に置き換える
-                        const arrowFuncCode = `async function* (${paramsText}) ${bodyText}`;
-                        //console.log('arrow code=\n',arrowFuncCode)
-                        replacements.push({
-                                start: arrowStart,
-                                end: arrowEnd, //arrowEnd, 
-                                text: arrowFuncCode
-                            });
-                        hasChanged = true;
                     }else{
-                        // 他のファイルのとき
-                        const bodyText = func.getBody().getText();
-                        const paramsText = func.getParameters().map(p => p.getText()).join(', ');
-                        func.replaceWithText(`async function* (${paramsText}) ${bodyText}`);
-                        const replacedId = targetFile.getFilePath()
-                        const replacedCode = targetFile.getText();
-                        //console.log('replacedCode=', replacedCode);
-                        Cache.MemoryCache.set(replacedId, replacedCode);
-                        targetFile.forget(); // 読み込み直し                        
+                        //console.log(func.getText())
+                        // アロー関数のとき（かつ他のファイルのとき）エラーにする
+                        REPLACER.arrowFuncErrorActionAnotherFile(func, sourceFile, targetFile, emitError);
+                        return {hasChanged: false, forceError: true};
                     }
 
 
                 }
-
-                // const targetFile = _method.getSourceFile();
-                // if(!(_method.isAsync() && _method.isGenerator())) {
-                //     // Async & Generatorでないとき
-                //     let isSameSourceFile = true;
-                //     if(targetFile != sourceFile) {
-                //         // 宣言が別ファイルのとき
-                //         isSameSourceFile = false;
-                //     }
-                //     if(!isSameSourceFile){
-                //         console.log('別ファイル')
-                //         const bodyText = _method.getBody()?.getText();
-                //         const paramsText = _method.getParameters().map(p => p.getText()).join(', ');
-                //         const methodName = _method.getName();
-                //         _method.replaceWithText(`async *${methodName} (${paramsText}) ${bodyText}`);
-                //             const replacedId = targetFile.getFilePath()
-                //         const replacedCode = targetFile.getText();
-                //         Cache.MemoryCache.set(replacedId, replacedCode);
-                //         targetFile.forget(); // 読み込み直し
-                //     }else{
-                //         console.log('同一ファイルだよ')
-                //         const start = _method.getStart();
-                //         const _methodCode = _method.getText();
-                //         console.log('_methodCode=', _methodCode)
-                //         const end = _methodCode.indexOf('(');
-                //         const name = _method.getName();
-                //         console.log('end=',end)
-                //         replacements.push({
-                //             start: start,
-                //             end: start + end, // "function" の長さ
-                //             text: `async *${name}`
-                //         });
-                //         hasChanged = true;
-                //     }
-                // }
             }
-            
-
         }
     }
+    // 左側が変数(Identifier)のとき
     if (rightExpression.getKind() === SyntaxKind.Identifier) {
         // セッターに変数（関数）を代入しているとき
         const rightIdentifier = rightExpression.asKindOrThrow(SyntaxKind.Identifier);
@@ -379,8 +248,6 @@ const replaceRightExpression = (rightExpression: Expression<ts.Expression>, sour
                 // 宣言が別ファイルのとき
                 isSameSourceFile = false;
             }
-            //console.log('declarationNode.getText()=', declarationNode.getText())
-            //console.log('declarationNode.getKind()=', declarationNode.getKind());
             
             // 変数宣言（const XXX = ...）であるか確認
             if (declarationNode.getKind() === SyntaxKind.VariableDeclaration) {
@@ -394,38 +261,37 @@ const replaceRightExpression = (rightExpression: Expression<ts.Expression>, sour
                         if(!isSameSourceFile){
                             //console.log('別ファイルで 置換')
                             const func = initializer.asKindOrThrow(SyntaxKind.FunctionExpression);
-                            const bodyText = func.getBody().getText();
-                            const paramsText = func.getParameters().map(p => p.getText()).join(', ');
-                            func.replaceWithText(`async function* (${paramsText}) ${bodyText}`);
-                            const replacedId = targetFile.getFilePath()
-                            const replacedCode = targetFile.getText();
-                            Cache.MemoryCache.set(replacedId, replacedCode);
-                            targetFile.forget(); // 読み込み直し
+                            REPLACER.funcToAsyncGeneratorAnotherFile(func, targetFile);
                         }else{
                             //console.log('同一ファイルで funcToAsyncGenerator')
-                            hasChanged = funcToAsyncGenerator(initializer);
+                            hasChanged = REPLACER.funcToAsyncGenerator(initializer);
                         }
                     } else if (initializer.getKind() === SyntaxKind.ArrowFunction) {
                         // もしアロー関数 (async () => {}) だった場合の考慮
                         // （アロー関数は generator になれないため、通常の関数式へ変換が必要）
                         // アロー関数を async function* () {} の文字列に置き換える
-                        hasChanged = arrowToAsyncGenerator(initializer);
+                        hasChanged = REPLACER.arrowToAsyncGenerator(initializer);
                     }
                 }
             }
         }
     }else {
-        // セッターに変数を代入していないとき
+        // セッターに変数を代入していない場合の処理
+        // すなわちセッターに関数を代入していることになるが、そのときは同一ファイルになるので
+        // 別ファイルの考慮は不要である。
+
         // 右辺が識別子（関数）であるか確認する
         if (rightExpression.getKind() === SyntaxKind.FunctionExpression) {
-            // セッターに関数を代入しているとき
+            // セッターに「function」を代入しているとき
             // 関数を async function* にする
-            hasChanged = funcToAsyncGenerator(rightExpression);
+            hasChanged = REPLACER.funcToAsyncGenerator(rightExpression);
         } else if (rightExpression.getKind() === SyntaxKind.ArrowFunction) {
-            // アロー関数の場合
-            // アロー関数を async function* () {} の文字列に置き換える
-            hasChanged = arrowToAsyncGenerator(rightExpression);
+            // アロー関数の場合, エラーにする
+            const func = rightExpression as ArrowFunction;
+            REPLACER.arrowFuncErrorAction(id, func, sourceFile, emitError);
+            //hasChanged = arrowToAsyncGenerator(rightExpression);
         }
     } 
-    return hasChanged;
+    return {hasChanged: hasChanged};
+
 }

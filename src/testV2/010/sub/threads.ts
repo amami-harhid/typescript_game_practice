@@ -1,5 +1,5 @@
-import { controlWait } from "../../../lib/controls";
 import { Sprite } from "../../../lib/sprite";
+import { CustomSprite } from "./customSprite";
 
 export const test2 = async function(this:Sprite) {
     this.degree = 20;
@@ -16,13 +16,50 @@ export const test2 = async function(this:Sprite) {
         this.Control.wait(20);
     }
 }
-
-export const threadObj = {
-    thread: async (aaaa: number=10, bbbb: number=10) => {
-        console.log(aaaa, bbbb)
+const test = async function*(this: CustomSprite) {
         for(;;){
-            console.log('abcdefg');
-            await controlWait(1);
+            //console.log('abcdefg');
+            this.Control.wait(1);
         }
-    }
+    };
+/**
+ * リテラルオブジェクト内の関数をスレッドセッターへ
+ * 代入するテスト用です
+ */
+export const threadObj = {
+    /**
+     * スレッドセッターへ代入していないときのテスト
+     * ==> asyncGeneratorでない場合はエラーになる
+     * @param this 
+     */
+    thread: async function*(this: CustomSprite) {
+        for(;;){
+            //console.log('abcdefg');
+            this.Control.wait(1);
+        }
+    },
+    /**
+     * アロー関数をスレッドに代入するとエラーになる
+     */
+    thread2: ()=>{
+        console.log('Arrow Function');
+    },
+    /**
+     * リテラルオブジェクトでコンスタントを使うと
+     * そのコンスタント(test)まで追跡しないので
+     * testの方のfunctionは async function* で
+     * ないとエラーになる。追跡の限界である。
+     */
+    thread3: test,
+    /**
+     * スレッドへ代入すると asyncGeneratorに変わる
+     * @param this 
+     */
+    thread4: function(this: CustomSprite) {
+        for(;;){
+            //console.log('abcdefg');
+            this.Control.wait(1);
+        }
+    },
+
 }

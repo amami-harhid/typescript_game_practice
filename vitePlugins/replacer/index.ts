@@ -2,6 +2,7 @@ import * as ts from 'typescript';
 import type { Plugin, ViteDevServer  } from 'vite';
 import * as path from 'path';
 import remapping from '@ampproject/remapping';
+import fs from 'fs'; 
 
 import * as helper from './helper.ts';
 import * as helperAwait from './helperAwaitTransformer.ts';
@@ -125,8 +126,16 @@ export function vitePluginAutoAwait(): Plugin {
 			 * 短い間隔でエラーが起きる場合は、２回目のエラー表示を無視するようにします。
 			 */ 
     	  	const emitErrorWrapper: helper.EmitErrorWrapper = (errObj: helper.ErrorObj) => {
+
+				if(errObj.isAnotherFile && errObj.isAnotherFile === true){
+					emitErrorServer(errObj);
+					return;
+				}
+
+				//console.log('Sending error for:', errObj.id)
+				const errorTargetId = errObj.id;
 				const now = Date.now();
-				const lastErrorTime = lastErrorCache.get(id) || 0;
+				const lastErrorTime = lastErrorCache.get(errorTargetId) || 0;
 				// 前回のエラーから 500ms 以内の場合は、Viteの重複リクエストとみなして処理をスルーする
 				if (now - lastErrorTime < 500) {
 					// すでに1回目でブラウザにエラーは送られているため
@@ -135,11 +144,68 @@ export function vitePluginAutoAwait(): Plugin {
 				}
 				clearCache();// エラー時には、キャッシュ強制クリアが必須です
 				// タイムスタンプを更新
-				lastErrorCache.set(id, now);
+				lastErrorCache.set(errorTargetId, now);
 				// 本物の Vite エラーを実行
+				//console.log('error reached')
 				this.error(errObj);
     		};
+    	  	const emitErrorServer: helper.EmitErrorWrapper = (errObj: helper.ErrorObj) => {
 
+				//console.log('Sending error for:', errObj.id)
+				const errorTargetId = errObj.id;
+				const now = Date.now();
+				const lastErrorTime = lastErrorCache.get(errorTargetId) || 0;
+				// 前回のエラーから 500ms 以内の場合は、Viteの重複リクエストとみなして処理をスルーする
+				if (now - lastErrorTime < 500) {
+					// すでに1回目でブラウザにエラーは送られているため
+					// 2回目はビルドをクラッシュさせずに静かにプロセスを終了させます
+					//throw new Error('VITE_PLUGIN_HANDLED_ERROR');
+					return;
+				}
+				clearCache();// エラー時には、キャッシュ強制クリアが必須です
+				// タイムスタンプを更新
+				lastErrorCache.set(errorTargetId, now);
+
+				if(server) {
+					// 🌟 ws.send('error') を使う場合、画面にコードスニペットを出すには「生のファイルコード」を frame に載せる必要があります
+					let fileContent = '';
+					try{
+						fileContent = fs.readFileSync(errObj.id, 'utf-8');
+					}catch (e) {
+						fileContent = code; // 読み込めなければ現在のコードで代用
+					}
+					// Viteのクライアントへ直接エラーイベントを発火（Viteがパスを上書きするのを防ぐ）
+					server.ws.send({
+						type: 'error',
+						err: {
+							message: errObj.message,
+							plugin: 'vite-plugin-auto-replacing',
+							id: errObj.id, // 🌟 これで別ファイルの絶対パスがそのまま届く
+							loc: errObj.loc,
+							// 🌟 stack プロパティが必須なので、簡易的なトレース文字列を生成して渡す
+							stack: `Error: ${errObj.message}\n    at ${errObj.id}:${errObj.loc.line}:${errObj.loc.column}`,
+							// エラー箇所の周辺コードスニペットを組み立てて渡す（ViteのError Overlay用）
+							frame: generateCodeFrame(fileContent, errObj.loc.line, errObj.loc.column)
+						}
+					} as any);
+				}
+
+				// 本物の Vite エラーを実行
+				//console.log('error reached')
+				//this.error(errObj);
+    		};
+			const generateCodeFrame = (code: string, line: number, column: number): string => {
+				const lines = code.split('\n');
+				const start = Math.max(0, line - 3);
+				const end = Math.min(lines.length, line + 3);
+				return lines.slice(start, end).map((l, i) => {
+    				const currentLineNum = start + i + 1;
+    				const isTarget = currentLineNum === line;
+    				const prefix = isTarget ? `> ${currentLineNum} | ` : `  ${currentLineNum} | `;
+    				const pointer = isTarget ? `\n    | ${' '.repeat(column - 1)}^` : '';
+    				return `${prefix}${l}${pointer}`;
+				}).join('\n');
+			}
     		// node_modules やに対象外のファイルはスルー
 			if( helper.isTargetIdExcluded(_id)) {
 				return null;
@@ -148,11 +214,20 @@ export function vitePluginAutoAwait(): Plugin {
 			const emitError = emitErrorWrapper.bind(this);
 			// ステップ１
 			// async generator化
-			const asyncGeneratorTransformResult = helperAsyncGenerator.asyncGeneratorTransformer(code,_id );
+			const asyncGeneratorTransformResult = helperAsyncGenerator.asyncGeneratorTransformer(code,_id, emitError);
+			//console.log('asyncGeneratorTransformResult##################')
+			//console.log(asyncGeneratorTransformResult.code)
+			
+			if(asyncGeneratorTransformResult.forceError === true) {
+				return { code: '', map: null};
+			}
 			// ステップ２
 			// await 追加( + 必要に応じて親メソッド定義を async にする)
 			// (magicStringを使う)
 			const awaitTransformResult = helperAwait.awaitTransformer(asyncGeneratorTransformResult.code, _id, emitError);
+			//console.log('awaitTransformResult##################')
+			//console.log(awaitTransformResult.code)
+			
 			// ステップ３
 			// 繰り返しループの中に yieldをつける ( + 必要に応じて親メソッドを Generator関数にする )
 			// Typescriptの公式変換( 型情報は消えて、Javascript になる )
@@ -189,6 +264,7 @@ export function vitePluginAutoAwait(): Plugin {
 				code: finalCode, 
 				map: mergedMap as any,
 			}
+
 		}
 	}
 } 

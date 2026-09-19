@@ -5,10 +5,12 @@ import { minimatch } from 'minimatch';
 import yieldExcludesJson from './json/yieldExcludes.json' with { type: 'json' };
 import targetIdsJson from './json/targetIds.json' with { type: 'json'};
 import awaitTargetsJson from './json/targetAwait.json' with { type: 'json' };
+import { ViteDevServer } from 'vite';
 
-export type ErrorObj = { message: string; id?: string; loc?: { line: number; column: number } };
+export type ErrorObj = { message: string; id: string; loc: { line: number; column: number }, isAnotherFile?: boolean };
 export type EmitErrorWrapper = (errObj : ErrorObj) => void;
 export type ClearCache = () => void;
+export type ClearCache2 = (id: string, server: ViteDevServer) => void;
 
 /**
  * 指定したノードを囲んでいる最寄りの親関数ノードを返す

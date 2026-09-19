@@ -103,11 +103,17 @@ export class Engine {
             //@ts-loop-yield-skip
             for(const thread of threads){
                 if( thread.active === true){
-                    thread.g.next().then((rtn)=>{
-                        if(rtn.done === true) {
-                            thread.active = false;
-                        }
-                    })
+                    try{
+                        thread.g.next().then((rtn)=>{
+                            if(rtn.done === true) {
+                                thread.active = false;
+                            }
+                        })
+                    }catch(e){
+                        console.log(e);
+                        clearInterval(interval);
+                        break;
+                    }
                 }
             }
             _engine.draw();

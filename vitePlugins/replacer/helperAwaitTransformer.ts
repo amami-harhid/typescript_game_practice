@@ -36,7 +36,8 @@ function getOrInitProject(): Project {
  * なお、このメソッドでは「MagicString」と「ts-morph」を使用している
  * @param {string} code コード 
  * @param {string} id ファイルパス 
- * @param {CustomError} emitError 独自エラーメッセージ送信するメソッド
+ * @param {EmitErrorWrapper} emitError 独自エラーメッセージ送信するメソッド
+ * 
  * @returns 
  */
 export function awaitTransformer(
@@ -122,7 +123,7 @@ export function awaitTransformer(
                                     sourceFile.forget(); 
                                     // 【B】エラーメッセージを表示する
                                     const errObj : ErrorObj = {
-                                        message: 'awaitを使うにはasync型の関数へと変更してください',
+                                        message: 'このメソッドを呼び出すには上位関数を『async』にする必要があります',
                                         id: id,
                                         loc: { line: lineNo, column: columnNo } // オプション: エラー箇所の行・列
                                     };

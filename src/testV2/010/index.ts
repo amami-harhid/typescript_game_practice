@@ -14,61 +14,64 @@ import { CustomSprite } from './sub/customSprite';
 const sprite = new CustomSprite();
 sprite.addImage(Cat);
 
-sprite.Thread.func = threadObj.thread;
+// sprite.Thread.func = ()=>{
+    
+// };
+
+sprite.Thread.func = threadObj.thread4;
 
 sprite.position.x = window.innerWidth/2;
 sprite.position.y = window.innerHeight/2;
 
 sprite.Control.wait(1);
 
-//sprite.Thread.func = sprite.thread;
 
-// let muki = -1;
-// const speed = 6;
+let muki = -1;
+const speed = 6;
+
 // const test = function() {
 //     return true;
 // }
 
 
-// const test3 = function (this:Sprite) {
+const test3 = function (this:CustomSprite) {
 
-//     this.degree = 20;
-//         // ずっと繰り返す
-//         for(;;){
+    this.degree = 20;
+    // ずっと繰り返す
+    for(;;){
 
-//             if(this.degree == 0){
-//                 continue;
-//             }
-//             if(this.degree == 90){
-//                 break;
-//             }
-//             this.Control.wait(2);
-//             muki *= -1;
+        if(this.degree == 0){                
+            continue;
+        }
+        if(this.degree == 90){
+            break;
+        }
+        this.Control.wait(2);
+        muki *= -1;
 
-//         }
-//     }
+    }
+}
     
-// sprite.Thread.func = test3;
+sprite.Thread.func = test3;
 // console.log(test());
 
-// sprite.Thread.func = function (this:Sprite){
-//     this.degree = 15;
-//     this.Control.wait(3);
-//     // ずっと繰り返す
-//     for(;;){
-//         this.degree += speed * muki;
-//         this.position.x += 1 * positionFlg;
-//     }
-// }
-// let positionFlg = -1;
+sprite.Thread.func = function (this:CustomSprite){
+    this.degree = 15;
+    this.Control.wait(3);
+    // ずっと繰り返す
+    for(;;){
+        this.degree += speed * muki;
+        this.position.x += 1 * positionFlg;
+    }
+}
+let positionFlg = -1;
 
-// sprite.Thread.func = () => {
-//     for(;;){
-//         (this as unknown  as Sprite).Control.wait(0.5);
-//         positionFlg *= -1;
-//     }
-// }
+sprite.Thread.func = function() {
+    for(;;){
+        (this as unknown  as CustomSprite).Control.wait(2);
+        positionFlg *= -1;
+    }
+}
 
-// sprite.Thread.func = test2
 
 Engine.run();
