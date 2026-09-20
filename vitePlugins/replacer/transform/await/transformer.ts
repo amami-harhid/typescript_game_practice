@@ -1,8 +1,6 @@
 import { JSDocTagInfo, Project, PropertyAccessExpression, Symbol, SyntaxKind } from 'ts-morph';
 import MagicString from 'magic-string';
-//import awaitTargetsJson from '../../json/targetAwait.json' with { type: 'json' };
 import * as path from 'path';
-//import * as TagMark from '../../TagMarks.ts';
 import type { ErrorObj } from '../../helper.ts';
 import * as Helper from '../../helper.ts';
 
@@ -12,7 +10,6 @@ function getOrInitProject(): Project {
     const project = new Project({
         compilerOptions: { target: 99 /* ESNext */ },
         skipAddingFilesFromTsConfig: true, // 高速化
-        //useInMemoryFileSystem: true // メモリだけで完結させる
     });
 
     return project;
@@ -76,17 +73,20 @@ export function transform(
         const expression = callExpr.getExpression(); // // 型 LeftHandSideExpression<ts.LeftHandSideExpression>
         if (expression.getKind() === SyntaxKind.PropertyAccessExpression) {
             const propAccess = expression as PropertyAccessExpression;
-            const methodName = propAccess.getName(); // this.Control.wait(10) ==> wait
-            const objectExpression = propAccess.getExpression(); // 型 LeftHandSideExpression<ts.LeftHandSideExpression>
-            // 左側のプロパティを取り出す
-            // 例）this.Control.wait のとき"Control"を得る
-            const objectName = objectExpression.getKind() === SyntaxKind.PropertyAccessExpression
-                    ? (objectExpression as PropertyAccessExpression).getName()
-                    : objectExpression.getText();
-            // 例) this.Control.waitのとき "Control.wait"を得る
-            const targetText = `${objectName}.${methodName}`;
+            const propAccessText = propAccess.getText();
+            let awaitMatch = false;
+            if(Helper.regexpObj.regexAwait){
+                for(const regexAwait of Helper.regexpObj.regexAwait){
+                    const _match = regexAwait.test(propAccessText)
+                    if(_match){
+                        awaitMatch = _match;
+                        break;
+                    }
+                }
+            }
             // 登録されているときは この callExprのJSDocのチェックをする
-            if( Helper.jsonDataObj.tagAwait.targets.fullNames.includes(targetText)) {
+            if( awaitMatch === true ) {
+                const objectExpression = propAccess.getExpression(); // 型 LeftHandSideExpression<ts.LeftHandSideExpression>
                 // JSDOC を取り込む
                 const _objectType = typeChecker.getTypeAtLocation(objectExpression);
                 _objectType.getProperties().some((prop: Symbol)=> {
@@ -96,7 +96,6 @@ export function transform(
                         // await付与をする
                         tags.forEach((tag: JSDocTagInfo)=>{
                             const tagName = tag.getName(); // this.Control.wait(10) ==> wait のJSDOCにある タグ @～
-                            //console.log('tagName=', tagName);
                             const NeedsAwait = Helper.jsonDataObj.tagMarks.NEEDS_AWAIT_METHOD_TAG.replace(/^@/, ''); // 先頭の@を消す
                             if( tagName == NeedsAwait) {
                                 // 直親の関数定義がAsync でないとき
@@ -120,9 +119,7 @@ export function transform(
                                     const start = callExpr.getStart();
                                     // 左側に("await ")を追加する
                                     magicString.appendLeft(start, 'await ');
-
                                     return true;
-
                                 }
                             }
                             return false;

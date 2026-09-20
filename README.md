@@ -209,3 +209,10 @@ TSファイルのパスが`**/lib/**`の場合、`**/node_modules/**`の場合�
 定義先が `**/lib/**` , `**/node_modules/**` の場合、または Viteの対象外の場合はエラーにする。
 
 動的に変化するメソッド、変数、リテラルオブジェクトなどは追跡不能。静的なコードによる追跡のみが有効。
+
+tracer.ts の中の find() は対象の最初の１個だけを返す仕組み、２個以上の場合に漏れが生じる。
+filter() で対象の全てを取得し、配列処理をしないといけない。
+
+```typescript
+const propertyDecl = declarations.find(d => d.getKind() === SyntaxKind.PropertyAssignment);
+```

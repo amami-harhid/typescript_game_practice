@@ -11,11 +11,9 @@
  * もし元のコードが const A = () => {} だった場合、ジェネレータ化するには function 構文にする必要が
  * ありますが、それも上記の例のように replaceWithText で簡単に対応可能です。
  */
-import { Node, Project, SyntaxKind, PropertyAccessExpression, SourceFile, ArrowFunction } from 'ts-morph';
+import { Node, Project, SyntaxKind, PropertyAccessExpression } from 'ts-morph';
 import MagicString from 'magic-string';
 import * as path from 'path';
-import targetThreadSetter from '../../json/targetThreadSetter.json' with { type: 'json' };
-//import * as TagMark from '../../TagMarks.ts';
 import * as Helper from '../../helper.ts';
 import * as REPLACER from './asyncGeneratoReplacer.ts';
 import * as RightExpression from './asyncGeneratorRightExpression.ts'
@@ -62,7 +60,17 @@ export function transform(code: string, id: string ): { code: string; map: any, 
                 const leftText = leftExpression.getText();
                 // 特定のパターン（例：末尾が .Thread.func）にマッチするか確認
                 // targetThreadSetter.json の targetsRegExp.pattern の正規表現で検証する
-                if( Helper.regexpObj.regexThreadSetter && Helper.regexpObj.regexThreadSetter.test(leftText)) {
+                let regexThreadSetterMatch = false;
+                if( Helper.regexpObj.regexThreadSetter ){
+                    for(const regexp of Helper.regexpObj.regexThreadSetter) {
+                        const _match = regexp.test(leftText)
+                        if(_match){
+                            regexThreadSetterMatch = true;
+                            break;
+                        }
+                    }
+                }
+                if( regexThreadSetterMatch === true) {
                 //const words = leftText.replace(/^.+\.(.+\..+)$/, "$1");
                 //if (targetThreadSetter.targets && targetThreadSetter.targets.includes(words)) {
                     const children = leftExpression.getChildren();

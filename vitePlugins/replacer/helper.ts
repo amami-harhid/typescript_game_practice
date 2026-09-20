@@ -11,7 +11,7 @@ import fs from 'fs';
 /** スレッドセッター*/
 export interface TargetThreadSetter {
 	targets?: string[],
-    targetsRegExp?: {pattern: string, flags?: string},
+    targetsRegExp?: {pattern: string, flags?: string}[],
 }
 /** タグマーク */
 export interface TagMarks {
@@ -21,7 +21,8 @@ export interface TagMarks {
 }
 /** Await対象タグ */
 export interface TagAwait {
-	targets: {names: string[], fullNames: string[]}
+	targets: {names: string[], fullNames: string[]},
+    targetsRegExp?: {pattern: string, flags?: string}[],
 }
 
 
@@ -33,10 +34,11 @@ export const jsonDataObj: JsonDataObj = {
 	tagAwait: {targets: {names:[''], fullNames:['']}},
 }
 
-type RegexpObj = {regexThreadSetter: RegExp|null};
+type RegexpObj = {regexThreadSetter: RegExp[], regexAwait: RegExp[]};
 /** Regex 保有オブジェクト */
 export const regexpObj: RegexpObj = {
-    regexThreadSetter: null
+    regexThreadSetter: [],
+    regexAwait: []
 }
 
 export type ErrorObj = { message: string; id: string; loc: { file?: string, line: number; column: number }, customSend?: boolean };

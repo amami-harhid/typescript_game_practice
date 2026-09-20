@@ -21,9 +21,19 @@ export function vitePluginAutoReplacer(
 	Helper.jsonDataObj.targetThreadSetter = targetThreadSetter;
 	Helper.jsonDataObj.tagAwait = tagAwait;
 
-	// Regex 生成
+	// Regex 生成 ( ThreadSetter )
 	if(targetThreadSetter.targetsRegExp){
-		Helper.regexpObj.regexThreadSetter = new RegExp(targetThreadSetter.targetsRegExp.pattern);
+		for(const targetRegExp of targetThreadSetter.targetsRegExp){
+			const regexp = new RegExp(targetRegExp.pattern);
+			Helper.regexpObj.regexThreadSetter.push( regexp );
+		}
+	}
+	// Regex 生成 ( Await )
+	if(tagAwait.targetsRegExp) {
+		for(const targetRegExp of tagAwait.targetsRegExp){
+			const regexp = new RegExp(targetRegExp.pattern);
+			Helper.regexpObj.regexAwait.push( regexp );
+		}
 	}
 
 	let compilerOptions: ts.CompilerOptions = {};

@@ -1,6 +1,10 @@
 {
-  "targets": {    
-      "names": ["wait"],
-      "fullNames": ["Control.wait"]
-  }
+	"targets": {    
+		"names": ["wait"],
+    	"fullNames": ["Control.wait"]
+	},
+    "targetsRegExp": [
+    	{ "pattern": "\\.Control\\.wait$" }
+    ]
+	
 }

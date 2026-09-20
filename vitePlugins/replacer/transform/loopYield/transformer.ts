@@ -1,6 +1,6 @@
 import * as ts from 'typescript';
 import * as Helper from '../../helper.ts';
-import type { ErrorObj, EmitErrorWrapper } from '../../helper.ts';
+import type { ErrorObj } from '../../helper.ts';
 
 type Visit = (node: ts.Node, inLoop?: boolean) => ts.Node;
 
@@ -26,15 +26,15 @@ const createYieldStatement = (): ts.ExpressionStatement => {
 }
 /**
  * 繰返しのブロックの中の置換処理
+ * @param id 
  * @param node 
  * @param visit 
- * @param id 
  * @returns 
  */
 const transformLoopBody = (
+        id: string,
         node: ts.Statement, 
         visit: (n: ts.Node, inLoop?: boolean) => ts.Node, 
-        id: string
     ): ts.Statement => {
 
     const sourceFile = node.getSourceFile();
@@ -131,31 +131,31 @@ const transformLoopBody = (
  * LOOP の置換
  * ブロックの最後に yield をつける
  */
-const loopChange = (id: string, node: ts.Node, visit:Visit, inLoop:boolean): [boolean, ts.Node] => {
+const loopChange = (id: string, node: ts.Node, visit:Visit): [boolean, ts.Node] => {
     
     if (ts.isForStatement(node)) {
         const _node = node as ts.ForStatement
-        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
+        const updatedBody = transformLoopBody(id, _node.statement, (n) => visit(n, true));
         const forStatement = ts.factory.updateForStatement(node, _node.initializer, _node.condition, _node.incrementor, updatedBody);
         return [true,forStatement];
     }else if (ts.isForInStatement(node)) {
         const _node = node as ts.ForInStatement
-        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
+        const updatedBody = transformLoopBody(id, _node.statement, (n) => visit(n, true));
         const forInStatemnet = ts.factory.updateForInStatement(node, _node.initializer, _node.expression, updatedBody);
         return [true, forInStatemnet];
     }else if (ts.isForOfStatement(node)) {
         const _node = node as ts.ForOfStatement;
-        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
+        const updatedBody = transformLoopBody(id, _node.statement, (n) => visit(n, true));
         const forOfStatement = ts.factory.updateForOfStatement(node, _node.awaitModifier, _node.initializer, _node.expression, updatedBody);
         return [true, forOfStatement];
     }else if (ts.isWhileStatement(node)) {
         const _node = node as ts.WhileStatement;
-        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
+        const updatedBody = transformLoopBody(id, _node.statement, (n) => visit(n, true));
         const whileStatement = ts.factory.updateWhileStatement(node, _node.expression, updatedBody);
         return [true, whileStatement];
     }else if (ts.isDoStatement(node)) {
         const _node = node as ts.DoStatement;
-        const updatedBody = transformLoopBody(_node.statement, (n) => visit(n, true), id);
+        const updatedBody = transformLoopBody(id, _node.statement, (n) => visit(n, true));
         const doStatement = ts.factory.updateDoStatement(node, updatedBody, _node.expression);
         return [true, doStatement];
     }
@@ -208,8 +208,8 @@ const transformIfBody = ( node: ts.Statement, visit: Visit): [boolean, ts.Statem
  * ループ処理ブロックの末尾にyield行を追加、break,continueの直前にyield行を追加する。
  * yieldを追加するとき直近の親関数がAsyncGenerator関数でない場合はエラーにする。
  * 
- * @param {string} code コード 
  * @param {string} id ファイルパス 
+ * @param {ts.TransformationContext} context コード 
  * @returns 
  */
 export const transform = (
@@ -267,7 +267,7 @@ export const transform = (
                     }
                 }
 
-                const [change, loopNewStatement] = loopChange(id, node, visit, inLoop);
+                const [change, loopNewStatement] = loopChange(id, node, visit);
                 if(change) {
                     return loopNewStatement;
                 }							

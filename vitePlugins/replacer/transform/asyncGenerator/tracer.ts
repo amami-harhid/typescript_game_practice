@@ -8,7 +8,6 @@ import * as Helper from '../../helper.ts';
  * ある間、定義元をたどっていく。
  * 
  * @param {Node<ts.Node>} node 
- * @param {IsInsideTarget} isInsideTarget 
  * @returns 
  */
 export const tracer = (node : Node<ts.Node>) => {
@@ -47,17 +46,37 @@ export const tracer = (node : Node<ts.Node>) => {
     return undefined;
 }
 
+/**
+ * 
+ * @param {Node<ts.Node>} node 
+ * @returns 
+ */
 const getDefinition = (node: Node<ts.Node>) => {
     if (node.getKind() === SyntaxKind.PropertyAccessExpression){
         const propertyAccessExpression = node.asKindOrThrow(SyntaxKind.PropertyAccessExpression);
         const symbol = propertyAccessExpression.getNameNode().getSymbol();
         if(symbol){
             const declarations = symbol.getDeclarations();
+            // MethodDeclarationは基本的に最大１個だけなので find() で取得してよい（例外の補足⇒※１）
+            // 例外補足１：　例外事項は無視する
+            // 通常のクラス定義において、同じクラス内に同名のメソッドを複数定義することができない
+            // しかし抽象クラス（Abstract Class）と派生クラスのメソッドを同じシンボルとして解決した場合、
+            // またはクラスの宣言マージ（特定のインターフェースや名前空間とクラスをマージして型を拡張する）
+            // の場合には複数の MethodDeclaration が1つのシンボルに紐づくケースがある。
+            // 別々のクラスで定義された同名メソッドが、ユニオン型などの交差によって1つのシンボルとして
+            // 見なされた場合にも、配列に複数含まれることがある。
             const methodDecl = declarations.find(d => d.getKind() === SyntaxKind.MethodDeclaration);
             if(methodDecl && methodDecl.getKind() == SyntaxKind.MethodDeclaration){
-                //console.log(methodDecl.getText(), methodDecl.getKindName());
                 return methodDecl;
             }
+            // PropertyAssignmentは基本的に最大１個だけなので find() で取得してよい（例外の補足⇒※２）
+            // 例外補足２： 例外事項は無視する
+            // 1つのオブジェクト内に同じキー（プロパティ名）を複数書くことは通常ありえない。
+            // (重複して書くと後ろの定義で上書きされるため)
+            // 単一のオブジェクトリテラル内を解析している限りはMAX1個である。
+            // しかしts-morph の型チェッカー（TypeChecker）経由でシンボルを取得した場合、
+            // 異なる場所にある複数のオブジェクトリテラルが、型推論によって1つの共通のプロパティシンボルに
+            // 集約されることがある。
             const propertyDecl = declarations.find(d => d.getKind() === SyntaxKind.PropertyAssignment);
             if(propertyDecl && propertyDecl.getKind()==SyntaxKind.PropertyAssignment) {
                 const propertyAssgnment = propertyDecl.asKindOrThrow(SyntaxKind.PropertyAssignment)
