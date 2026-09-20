@@ -1,8 +1,9 @@
-import { Sprite } from './lib/sprite';
+import * as Lib from './lib/';
+import type { ISprite as Sprite } from './lib/sprite';
 import * as Thread from './sub/threads';
 import { outSideFunc } from '../../../lib/test';
 
-const sprite = new Sprite();
+const sprite = new Lib.Sprite();
 
 sprite.Thread.func = Thread.CustomSpriteObj01.thread01_01;
 
@@ -30,13 +31,13 @@ sprite.Thread.func = Thread.obj01.obj01_04;
 
 //sprite.Thread.func = Thread.obj01.obj01_05;
 
-sprite.Thread.func = function(this:Sprite) {
+sprite.Thread.func = function(this: Sprite) {
     for(;;)
         //console.log("001 - direct function()")
         this.Control.wait(1);
 }
 
-const func001 = function(this:Sprite) {
+const func001 = function(this: Sprite) {
     for(;;)
         //console.log("002 - direct function()")
         this.Control.wait(1);

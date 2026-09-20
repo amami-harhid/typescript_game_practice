@@ -1,9 +1,14 @@
 import { controlWait } from "../../../../lib/controls";
+
+export interface IEntityControl {
+    wait(second: number): Promise<void>;
+}
+
 /**
  * @abstract
  * @needsAwait
  */
-export class EntityControl {
+export class EntityControl implements IEntityControl{
 
     /**
      * あいうえお

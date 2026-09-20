@@ -60,10 +60,11 @@ export function transform(code: string, id: string ): { code: string; map: any, 
             if (leftExpression.getKind() === SyntaxKind.PropertyAccessExpression) {
 
                 const leftText = leftExpression.getText();
-                // 特定のパターン（末尾が .Thread.func）にマッチするか確認
-                const words = leftText.replace(/^.+\.(.+\..+)$/, "$1");
-                if (targetThreadSetter.targets.includes(words)) {
-                    //console.log(words)
+                // 特定のパターン（例：末尾が .Thread.func）にマッチするか確認
+                // targetThreadSetter.json の targetsRegExp.pattern の正規表現で検証する
+                if( Helper.regexpObj.regexThreadSetter && Helper.regexpObj.regexThreadSetter.test(leftText)) {
+                //const words = leftText.replace(/^.+\.(.+\..+)$/, "$1");
+                //if (targetThreadSetter.targets && targetThreadSetter.targets.includes(words)) {
                     const children = leftExpression.getChildren();
                     const func = children[children.length-1]; // xxx.Thread.func のときに 最後のNode(=func)を取り出す
                     if(func.getKind() == SyntaxKind.Identifier /* (80) */) {  

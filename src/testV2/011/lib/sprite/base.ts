@@ -2,6 +2,11 @@ import { Engine } from "../engine";
 import { Costume } from "./costume";
 import type { ThreadCaller } from "../engine";
 import { Entity } from "../entity";
+
+export interface IThread {
+    set func(f: ThreadCaller);
+}
+
 export class SpriteBase extends Entity{
 
     protected _engine: Engine;
@@ -20,7 +25,7 @@ export class SpriteBase extends Entity{
     addImage( svg: string) {
         this._svg.push(svg);
     }
-    get Thread() {
+    get Thread() : IThread {
         const _me = this;
         return {
             /**

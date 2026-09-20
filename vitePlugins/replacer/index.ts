@@ -21,6 +21,11 @@ export function vitePluginAutoReplacer(
 	Helper.jsonDataObj.targetThreadSetter = targetThreadSetter;
 	Helper.jsonDataObj.tagAwait = tagAwait;
 
+	// Regex 生成
+	if(targetThreadSetter.targetsRegExp){
+		Helper.regexpObj.regexThreadSetter = new RegExp(targetThreadSetter.targetsRegExp.pattern);
+	}
+
 	let compilerOptions: ts.CompilerOptions = {};
 
 	return {

@@ -4,14 +4,14 @@ import * as ts from 'typescript';
 import { minimatch } from 'minimatch';
 import yieldExcludesJson from './json/yieldExcludes.json' with { type: 'json' };
 import targetIdsJson from './json/targetIds.json' with { type: 'json'};
-import awaitTargetsJson from './json/targetAwait.json' with { type: 'json' };
 import { ViteDevServer, ResolvedConfig, normalizePath } from 'vite';
 import { SourceFile } from 'ts-morph';
 import fs from 'fs'; 
 
 /** スレッドセッター*/
 export interface TargetThreadSetter {
-	targets: string[]
+	targets?: string[],
+    targetsRegExp?: {pattern: string, flags?: string},
 }
 /** タグマーク */
 export interface TagMarks {
@@ -28,15 +28,21 @@ export interface TagAwait {
 type JsonDataObj = {targetThreadSetter: TargetThreadSetter, tagMarks: TagMarks, tagAwait: TagAwait};
 /** JSONデータ保有オブジェクト */
 export const jsonDataObj: JsonDataObj = {
-	targetThreadSetter: {targets: []},
+	targetThreadSetter: {},
 	tagMarks: {LOOP_YIELD_SKIP_TAG:"", THREAD_SETTER_TAG:"", NEEDS_AWAIT_METHOD_TAG:""},
 	tagAwait: {targets: {names:[''], fullNames:['']}},
+}
+
+type RegexpObj = {regexThreadSetter: RegExp|null};
+/** Regex 保有オブジェクト */
+export const regexpObj: RegexpObj = {
+    regexThreadSetter: null
 }
 
 export type ErrorObj = { message: string; id: string; loc: { file?: string, line: number; column: number }, customSend?: boolean };
 export type EmitErrorWrapper = (errObj : ErrorObj) => void;
 export type ClearCache = (id: string) => void;
-export type ClearCache2 = (id: string, server: ViteDevServer) => void;
+//export type ClearCache2 = (id: string, server: ViteDevServer) => void;
 
 export type IsInsideTarget = (targetSourceFile: SourceFile) => boolean
 

@@ -1,5 +1,18 @@
+import { IEntityControl } from "../entity/entityControl";
 import { SpriteBase } from "./base";
-export class Sprite extends SpriteBase{
+import { IThread } from "./base";
+export interface StaticSprite {
+    new (): ISprite;
+}
+
+export interface ISprite {
+    set position(_position: {x: number, y: number});
+    get position(): {x: number, y: number};
+    readonly Thread: IThread;
+    readonly Control: IEntityControl;
+
+}
+export class Sprite extends SpriteBase implements ISprite{
     private _scale = {w: 100, h: 100};
     private _degree = 0;
     private _canvas!: HTMLCanvasElement;

@@ -1,5 +1,10 @@
 {
   "targets": [
-        "Thread.func"
-    ]
+        "Thread.func",
+        "Event.func"
+    ],
+   "targetsRegExp": [
+        { "pattern": "\\.Thread\\.func$" }
+   ]
+
 }
