@@ -1,7 +1,7 @@
 import * as ts from 'typescript';
 import { Expression, SyntaxKind, SourceFile, MethodDeclaration, FunctionExpression, ArrowFunction } from 'ts-morph';
 import * as Cache from '../../memoryCache.ts';
-import { EmitErrorWrapper, ErrorObj } from '../../helper.ts';
+import * as Helper from '../../helper.ts';
 
 /**
  * 置換位置を記録するための配列
@@ -94,10 +94,8 @@ export const methodToAsyncGenerator = function(method: MethodDeclaration){
  * @param targetFile
  */
 export const methodToAsyncGeneratorAnotherFile = function(method: MethodDeclaration, targetFile: SourceFile){
-    //console.log('=== 別ファイルの置換 methodToAsyncGeneratorAnotherFile')
     const body = method.getBody();
     if(body){
-        //console.log('Body あり')
         const bodyText = body.getText();
         const params = method.getParameters();
         const paramsText = params.map(p => p.getText()).join(', ');
@@ -138,7 +136,7 @@ export const funcToAsyncGeneratorAnotherFile = function(func: FunctionExpression
  * @param func 
  * @param sourceFile 
  */
-export const arrowFuncErrorAction = function(id: string, func: ArrowFunction, sourceFile: SourceFile, emitError: EmitErrorWrapper) {
+export const arrowFuncErrorAction = function(id: string, func: ArrowFunction, sourceFile: SourceFile) {
     // 行番号
     const lineNo = func.getStartLineNumber();
     // 列番号 = ノード全体の開始位置 - 行の開始位置 + 1 
@@ -146,12 +144,13 @@ export const arrowFuncErrorAction = function(id: string, func: ArrowFunction, so
     // 先にTS-Morphメモリを解放する(エラー表示後のホットリロード時に全コードの整合性を保つ)ために【A】を行う
     // 【A】ts-morph のメモリ解放
     sourceFile.forget();
-    const errObj : ErrorObj = {
+    const errObj : Helper.ErrorObj = {
         message: 'Arrow関数はスレッド化できません[001]',
         id: id,
-        loc: { line: lineNo, column: columnNo } // オプション: エラー箇所の行・列
+        loc: { line: lineNo, column: columnNo }, // オプション: エラー箇所の行・列
+        customSend: true,
     };
-    emitError(errObj);
+    Helper.emitError(errObj);
 }
 /**
  * 別ファイルの置換時のArrow-Threadエラー処理
@@ -159,24 +158,21 @@ export const arrowFuncErrorAction = function(id: string, func: ArrowFunction, so
  * @param anotherFile 
  * @param emitError 
  */
-export const arrowFuncErrorActionAnotherFile = function(func: ArrowFunction, sourceFile: SourceFile, anotherFile: SourceFile, emitError: EmitErrorWrapper) {
+export const arrowFuncErrorActionAnotherFile = function(func: ArrowFunction) {
+    const anotherFile = func.getSourceFile();
     const anotherFileId = anotherFile.getFilePath();
-    //console.log('another file id = ', anotherFileId);
-    //const source = func.getSourceFile();
-    //console.log(source.getText());
     // 行番号
     const lineNo = func.getStartLineNumber();
     // 列番号 = ノード全体の開始位置 - 行の開始位置 + 1
     const columnNo = func.getStart() - func.getStartLinePos() + 1;
     // 先にTS-Morphメモリを解放する(エラー表示後のホットリロード時に全コードの整合性を保つ)ために【A】を行う
     // 【A】ts-morph のメモリ解放
-    //sourceFile.forget();
     anotherFile.forget();
-    const errObj : ErrorObj = {
+    const errObj : Helper.ErrorObj = {
         message: 'Arrow関数はスレッド化できません[002]',
         id: anotherFileId,
         loc: { line: lineNo, column: columnNo }, // オプション: エラー箇所の行・列
         customSend: true,
     };
-    emitError(errObj);
+    Helper.emitError(errObj);
 }

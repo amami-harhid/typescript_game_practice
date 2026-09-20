@@ -4,67 +4,77 @@ import * as Helper from '../../helper.ts';
 import * as Replacer from './asyncGeneratoReplacer.ts';
 import { tracer } from './tracer.ts';
 
-const finalNodeAction = (id: string, finalNode: Node<ts.Node>, sourceFile: SourceFile, emitError: Helper.EmitErrorWrapper) => {
+/**
+ * スレッドセッターへ格納する「何か」の定義元を探索し、探索し終わったときの後始末
+ * 
+ * @param {string} id 
+ * @param {Node<ts.Node>} finalNode 
+ * @param {SourceFile} sourceFile 
+ * @returns 
+ */
+const finalNodeAction = (id: string, finalNode: Node<ts.Node>, sourceFile: SourceFile) => {
     let hasChanged = false;
-            const targetFile = finalNode.getSourceFile();
-            if(sourceFile == targetFile){
-                //console.log('同一ファイル')
-                // 同一ファイル
-                if(finalNode.getKind()===SyntaxKind.FunctionExpression){
-                    const funcExpression = finalNode.asKindOrThrow(SyntaxKind.FunctionExpression);
-                    Replacer.funcToAsyncGenerator(funcExpression);
-                    hasChanged = true;
-                    return {hasChanged: true, forceError: false};
-                }else if(finalNode.getKind()===SyntaxKind.MethodDeclaration){
-                    const method = finalNode.asKindOrThrow(SyntaxKind.MethodDeclaration);
-                    Replacer.methodToAsyncGenerator(method);
-                    hasChanged = true;
-                    return {hasChanged: true, forceError: false};
-                }else if(finalNode.getKind()===SyntaxKind.ArrowFunction){
-                    const arrow = finalNode.asKindOrThrow(SyntaxKind.ArrowFunction);
-                    Replacer.arrowFuncErrorAction(id, arrow, sourceFile, emitError);
-                    return {hasChanged: false, forceError: true};
-                }else{
-                    console.log('同一ファイル ');
-                    console.log(sourceFile.getFilePath());
-                    console.log(finalNode.getKindName());
-                    console.log(finalNode.getText());
-                }
-            }else{
-                //console.log('異なるファイル')
-                // 異なるファイル
-                if(finalNode.getKind()===SyntaxKind.FunctionExpression){
-                    const funcExpression = finalNode.asKindOrThrow(SyntaxKind.FunctionExpression);
-                    Replacer.funcToAsyncGeneratorAnotherFile(funcExpression, targetFile);
-                    return {hasChanged: true, forceError: false};
-                }else if(finalNode.getKind()===SyntaxKind.MethodDeclaration){
-                    const method = finalNode.asKindOrThrow(SyntaxKind.MethodDeclaration);
-                    Replacer.methodToAsyncGeneratorAnotherFile(method, targetFile);
-                    return {hasChanged: true, forceError: false};
-                }else if(finalNode.getKind()===SyntaxKind.ArrowFunction) {
-                    const arrow = finalNode.asKindOrThrow(SyntaxKind.ArrowFunction);
-                    Replacer.arrowFuncErrorActionAnotherFile(arrow, sourceFile, targetFile, emitError );
-                    return {hasChanged: false, forceError: true};
-                }else{
-                    console.log('同一ファイル ');
-                    console.log(sourceFile.getFilePath());
-                    console.log(finalNode.getKindName());
-                    console.log(finalNode.getText());
-
-                }
-
-            }
+    const targetFile = finalNode.getSourceFile();
+    if(sourceFile == targetFile){
+        //console.log('同一ファイル')
+        // 同一ファイル
+        if(finalNode.getKind()===SyntaxKind.FunctionExpression){
+            const funcExpression = finalNode.asKindOrThrow(SyntaxKind.FunctionExpression);
+            Replacer.funcToAsyncGenerator(funcExpression);
+            hasChanged = true;
+            return {hasChanged: true, forceError: false};
+        }else if(finalNode.getKind()===SyntaxKind.MethodDeclaration){
+            const method = finalNode.asKindOrThrow(SyntaxKind.MethodDeclaration);
+            Replacer.methodToAsyncGenerator(method);
+            hasChanged = true;
+            return {hasChanged: true, forceError: false};
+        }else if(finalNode.getKind()===SyntaxKind.ArrowFunction){
+            const arrow = finalNode.asKindOrThrow(SyntaxKind.ArrowFunction);
+            Replacer.arrowFuncErrorAction(id, arrow, sourceFile);
+            return {hasChanged: false, forceError: true};
+        }else{
+            console.log('同一ファイル ');
+            console.log(sourceFile.getFilePath());
+            console.log(finalNode.getKindName());
+            console.log(finalNode.getText());
+        }
+    }else{
+        //console.log('異なるファイル')
+        // 異なるファイル
+        if(finalNode.getKind()===SyntaxKind.FunctionExpression){
+            const funcExpression = finalNode.asKindOrThrow(SyntaxKind.FunctionExpression);
+            Replacer.funcToAsyncGeneratorAnotherFile(funcExpression, targetFile);
+            return {hasChanged: true, forceError: false};
+        }else if(finalNode.getKind()===SyntaxKind.MethodDeclaration){
+            const method = finalNode.asKindOrThrow(SyntaxKind.MethodDeclaration);
+            Replacer.methodToAsyncGeneratorAnotherFile(method, targetFile);
+            return {hasChanged: true, forceError: false};
+        }else if(finalNode.getKind()===SyntaxKind.ArrowFunction) {
+            const arrow = finalNode.asKindOrThrow(SyntaxKind.ArrowFunction);
+            Replacer.arrowFuncErrorActionAnotherFile(arrow);
+            return {hasChanged: false, forceError: true};
+        }else{
+            console.log('同一ファイル ');
+            console.log(sourceFile.getFilePath());
+            console.log(finalNode.getKindName());
+            console.log(finalNode.getText());
+        }
+    }
     return {hasChanged: false, forceError: false};
 }
-const outSideError = (node : Expression<ts.Expression>)  :Helper.ErrorObj => {
-
+/**
+ * Vite定義外のスレッドをスレッドセッターへ代入しようと
+ * したときのエラー
+ * @param { Expression<ts.Expression> } expression
+ */
+const outSideError = (expression : Expression<ts.Expression>)  :Helper.ErrorObj => {
     // 行番号
-    const lineNo = node.getStartLineNumber();
+    const lineNo = expression.getStartLineNumber();
     // 列番号 = ノード全体の開始位置 - 行の開始位置 + 1 
-    const columnNo = node.getStart() - node.getStartLinePos() + 1;
+    const columnNo = expression.getStart() - expression.getStartLinePos() + 1;
     // 先にTS-Morphメモリを解放する(エラー表示後のホットリロード時に全コードの整合性を保つ)ために【A】を行う
     // 【A】ts-morph のメモリ解放
-    const sourceFile = node.getSourceFile();
+    const sourceFile = expression.getSourceFile();
     //sourceFile.forget();
     const id = sourceFile.getFilePath();
     const errObj : Helper.ErrorObj = {
@@ -80,39 +90,36 @@ const outSideError = (node : Expression<ts.Expression>)  :Helper.ErrorObj => {
  * @param {string} id 対象ファイルのパス
  * @param {Expression<ts.Expression>} rightExpression 左部のExpression 
  * @param {SourceFile} sourceFile 
- * @param {IsInsideTarget} isInsideTarget
- * @param {EmitErrorWrapper} emitError 
  * @returns 
  */
-export const replacer = (id:string, rightExpression: Expression<ts.Expression>, sourceFile: SourceFile, isInsideTarget: Helper.IsInsideTarget, emitError: Helper.EmitErrorWrapper): {hasChanged:boolean, forceError?: boolean} => {
+export const replacer = (id:string, rightExpression: Expression<ts.Expression>, sourceFile: SourceFile): {hasChanged:boolean, forceError?: boolean} => {
     let hasChanged = false;
     // 右側が『PropertyAccessExpression』のとき
     // クラスインスタンスメソッドまたはリテラルオブジェクトのメソッドの場合が想定される
     if (rightExpression.getKind() === SyntaxKind.PropertyAccessExpression){
-        const finalNode = tracer(rightExpression, isInsideTarget);
+        const finalNode = tracer(rightExpression);
         if(finalNode == undefined){
             //console.log('finalNode is undefined [001]');
             const errObj = outSideError(rightExpression);
-            emitError(errObj);
+            Helper.emitError(errObj);
 
         }
         if(finalNode){
             hasChanged = true;
-            const rtn = finalNodeAction(id, finalNode, sourceFile, emitError);
+            const rtn = finalNodeAction(id, finalNode, sourceFile);
             hasChanged = rtn.hasChanged;
         }
     }
     // 右側が「識別子（名前）」(Identifier)のとき
     if (rightExpression.getKind() === SyntaxKind.Identifier) {
         const rightIdentifier = rightExpression.asKindOrThrow(SyntaxKind.Identifier);
-        const finalNode = tracer(rightIdentifier, isInsideTarget);
+        const finalNode = tracer(rightIdentifier);
         if(finalNode == undefined){
-            //console.log('finalNode is undefined [002]');
             const errObj = outSideError(rightExpression);
-            emitError(errObj);
+            Helper.emitError(errObj);
         }
         if(finalNode){
-            const rtn = finalNodeAction(id, finalNode, sourceFile, emitError);
+            const rtn = finalNodeAction(id, finalNode, sourceFile);
             hasChanged = rtn.hasChanged;
         }
     }else {
@@ -129,8 +136,7 @@ export const replacer = (id:string, rightExpression: Expression<ts.Expression>, 
             // アロー関数の場合, エラーにする
             hasChanged = false;
             const func = rightExpression as ArrowFunction;
-            Replacer.arrowFuncErrorAction(id, func, sourceFile, emitError);
-            //hasChanged = arrowToAsyncGenerator(rightExpression);
+            Replacer.arrowFuncErrorAction(id, func, sourceFile);
         }
     } 
     return {hasChanged: hasChanged};

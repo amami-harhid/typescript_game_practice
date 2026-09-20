@@ -1,5 +1,5 @@
 import * as ts from 'typescript';
-import * as helper from '../../helper.ts';
+import * as Helper from '../../helper.ts';
 import type { ErrorObj, EmitErrorWrapper } from '../../helper.ts';
 
 type Visit = (node: ts.Node, inLoop?: boolean) => ts.Node;
@@ -210,13 +210,11 @@ const transformIfBody = ( node: ts.Statement, visit: Visit): [boolean, ts.Statem
  * 
  * @param {string} code コード 
  * @param {string} id ファイルパス 
- * @param {CustomError} emitError 独自エラーメッセージ送信するメソッド
  * @returns 
  */
 export const transform = (
     id: string, 
     context: ts.TransformationContext,
-    emitError: EmitErrorWrapper,
 ) => {
     return (rootNode: ts.SourceFile) => {
 
@@ -229,42 +227,42 @@ export const transform = (
                 ts.isWhileStatement(node) ||
                 ts.isDoStatement(node)
                 ) {
-                if (helper.hasSkipComment(node, rootNode)) {
+                if (Helper.hasSkipComment(node, rootNode)) {
                     return ts.visitEachChild(node, (n) => visit(n, false), context);
                 }
                 const filePath = node.getSourceFile().fileName;
-                if(helper.isYieldExcluded(filePath)){
+                if(Helper.isYieldExcluded(filePath)){
                     return ts.visitEachChild(node, (n) => visit(n, false), context);
                 }
                 // エラーターゲットノードを取り出す(親関数がないときはループノード、あるときは親関数ノード)
                 let errorTargetNode: ts.Node|undefined = undefined;
-                const parent = helper.findParentFunction(node);
+                const parent = Helper.findParentFunction(node);
                 if( parent == undefined){
                     errorTargetNode = node; // ループのノード
-                }else if( !helper.isGenerator(parent) && !helper.isAsyncGenerator(parent)) {
+                }else if( !Helper.isGenerator(parent) && !Helper.isAsyncGenerator(parent)) {
                     errorTargetNode = parent; // 親関数
                 }
                 if(errorTargetNode && parent == undefined){
-                    const info = helper.getTsNodeLocation(errorTargetNode);
+                    const info = Helper.getTsNodeLocation(errorTargetNode);
                     const errObj: ErrorObj = {
                         message: 'Generator関数でない中でyieldを付与できません[001]',
                         id: id,
                         loc: { line: info.line, column: info.column }, // オプション: エラー箇所の行・列
                         customSend : true,
                     }
-                    emitError(errObj);
+                    Helper.emitError(errObj);
                 }
                 if(parent){
                     // 親関数が generator/asyncGeneratorでないときはエラーとする
-                    if( !helper.isGenerator(parent) && !helper.isAsyncGenerator(parent)) {
-                        const info = helper.getTsNodeLocation(parent);
+                    if( !Helper.isGenerator(parent) && !Helper.isAsyncGenerator(parent)) {
+                        const info = Helper.getTsNodeLocation(parent);
                         const errObj: ErrorObj = {
                             message: 'Generator関数でない中でyieldを付与できません[002]',
                             id: id,
                             loc: { line: info.line, column: info.column }, // オプション: エラー箇所の行・列
                             customSend : true,
                         }
-                        emitError(errObj);
+                        Helper.emitError(errObj);
                         //console.log('==== after emitError ====')
                     }
                 }

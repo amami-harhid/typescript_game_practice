@@ -11,7 +11,7 @@ import * as Helper from '../../helper.ts';
  * @param {IsInsideTarget} isInsideTarget 
  * @returns 
  */
-export const tracer = (node : Node<ts.Node>, isInsideTarget: Helper.IsInsideTarget) => {
+export const tracer = (node : Node<ts.Node>) => {
     if (node.getKind() === SyntaxKind.PropertyAccessExpression || node.getKind() === SyntaxKind.Identifier){
         let traceNode = getDefinition(node);
         const continuedCondition = (node:Node<ts.Node>|undefined) => {
@@ -36,7 +36,7 @@ export const tracer = (node : Node<ts.Node>, isInsideTarget: Helper.IsInsideTarg
         }
         if(traceNode){
             const targetSourceFile = traceNode.getSourceFile();
-            const _isInside = isInsideTarget(targetSourceFile);
+            const _isInside = Helper.isInsideTargetSrc(targetSourceFile);
             if(_isInside){
                 // Viteルート配下にあるときは 探索したノードを返す
                 //console.log("[tracer 001] ", traceNode.getText(), traceNode.getKindName());

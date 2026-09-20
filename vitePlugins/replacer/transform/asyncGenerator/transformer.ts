@@ -40,11 +40,9 @@ function getOrInitProject(): Project {
  * なお、このメソッドでは「MagicString」と「ts-morph」を使用している
  * @param {string} code コード 
  * @param {string} id ファイルパス 
- * @param {IsInsideTarget} isInsideTarget Vite管理下にあるソースかを確認するユーティリティ
- * @param {EmitErrorWrapper} emitError 独自エラーメッセージ送信するメソッド
  * @returns 
  */
-export function transform(code: string, id: string, isInsideTarget: Helper.IsInsideTarget, emitError: Helper.EmitErrorWrapper ): { code: string; map: any, forceError: boolean } {
+export function transform(code: string, id: string ): { code: string; map: any, forceError: boolean } {
     const magicString = new MagicString(code)
     const currentProject = getOrInitProject();
     const sourceFile = currentProject.createSourceFile(id, code, { overwrite: true });
@@ -89,7 +87,7 @@ export function transform(code: string, id: string, isInsideTarget: Helper.IsIns
                                     if(match) {
                                         // TagMark.THREAD_SETTER_TAGがJSDOCに書かれている場合
                                         // セッターに代入している方を探索して置換処理をする
-                                        const rightRslt = RightExpression.replacer(id, rightExpression, sourceFile, isInsideTarget, emitError);
+                                        const rightRslt = RightExpression.replacer(id, rightExpression, sourceFile);
                                         hasChanged = rightRslt.hasChanged;
                                         if(rightRslt.forceError && rightRslt.forceError === true){
                                             forceError = rightRslt.forceError;

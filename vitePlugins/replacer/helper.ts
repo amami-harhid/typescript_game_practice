@@ -5,18 +5,154 @@ import { minimatch } from 'minimatch';
 import yieldExcludesJson from './json/yieldExcludes.json' with { type: 'json' };
 import targetIdsJson from './json/targetIds.json' with { type: 'json'};
 import awaitTargetsJson from './json/targetAwait.json' with { type: 'json' };
-import { ViteDevServer } from 'vite';
+import { ViteDevServer, ResolvedConfig, normalizePath } from 'vite';
 import { SourceFile } from 'ts-morph';
+import fs from 'fs'; 
 
 export type ErrorObj = { message: string; id: string; loc: { file?: string, line: number; column: number }, customSend?: boolean };
 export type EmitErrorWrapper = (errObj : ErrorObj) => void;
-export type ClearCache = () => void;
+export type ClearCache = (id: string) => void;
 export type ClearCache2 = (id: string, server: ViteDevServer) => void;
 
 export type IsInsideTarget = (targetSourceFile: SourceFile) => boolean
 
+
+/** 
+ * キャッシュを強制クリアするヘルパー関数
+ * TSコードを修正保存するときホットリロードされるが
+ * 関連するファイル全てについて置換処理（１段目、２段目、３段目）のやり直しを
+ * させたい。エラー発生したときにはキャッシュ強制クリアをペアで行うものとする
+ * @param {string} id
+ */ 
+export const clearCache: ClearCache = (id: string) => {
+	const server = ServerObj.server;
+	if (server) {
+		const moduleNode = server.moduleGraph.getModuleById(id);
+		if (moduleNode) {
+			// モジュールグラフからこのファイルのキャッシュを無効化
+			server.moduleGraph.invalidateModule(moduleNode);
+		}
+	}
+}
+
+/** ファイルパスごとの最終エラー時刻を記録するMap */
+export const lastErrorOverlayCache = new Map<string, number>();
+
+/**
+ * エラー発生時のラッパー関数
+ * Viteの開発サーバー（HMR）の二重ロード仕様によるエラーメッセージ２重呼出しを回避させる意図で
+ * 用意したエラーラッパー関数です。
+ * 
+ * 開発時には「プリトランスパイル（Pre-transform）」と
+ * 「実際のモジュール構築（Internal server/Bundle）」の２つのフェーズで
+ * transformフックが呼び出されます。
+ * そのため、２回連続でエラーが起こることになり少々目障り感があります。
+ * 短い間隔でエラーが起きる場合は、２回目のエラー表示を無視するようにします。
+ */ 
+export const emitError: EmitErrorWrapper = (errObj: ErrorObj) => {
+
+    const errorTargetId = errObj.id;
+    const now = Date.now();
+    const lastErrorTime = lastErrorOverlayCache.get(errorTargetId) || 0;
+    // 前回のエラーから 500ms 以内の場合は、Viteの重複リクエストとみなして処理をスルーする
+    if (now - lastErrorTime < 500) {
+        // すでに1回目でブラウザにエラーは送られているため
+    	// 2回目はビルドをクラッシュさせずに静かにプロセスを終了させます
+        return;
+    }
+    clearCache(errorTargetId); // エラー時には、キャッシュ強制クリアが必須です
+    
+	// タイムスタンプを更新
+    lastErrorOverlayCache.set(errorTargetId, now);
+
+	const server = ServerObj.server;
+    if(server) {
+        // 🌟 ws.send('error') を使う場合、画面にコードスニペットを出すには「生のファイルコード」を frame に載せる必要があります
+    	let fileContent = '';
+        try{
+        	fileContent = fs.readFileSync(errObj.id, 'utf-8');
+        }catch (e) {
+			// 読み込み失敗時に不用意に復旧させるよりも落とすことで致命的エラーを知らせる
+			console.error('環境上のエラーがあります。見直ししてください。')
+			throw e;
+    	}
+    	// Viteのクライアントへ直接エラーイベントを発火（Viteがパスを上書きするのを防ぐ）
+    	server.ws.send({
+    		type: 'error',
+        	err: {
+    			message: errObj.message,
+            	plugin: 'vite-plugin-auto-replacing',
+            	id: errObj.id, // これで別ファイルの絶対パスがそのまま届く
+            	loc: errObj.loc,
+            	// stack プロパティが必須なので、簡易的なトレース文字列を生成して渡す
+            	stack: `Error: ${errObj.message}\n    at ${errObj.id}:${errObj.loc.line}:${errObj.loc.column}`,
+        		// エラー箇所の周辺コードスニペットを組み立てて渡す（ViteのError Overlay用）
+            	frame: generateCodeFrame(fileContent, errObj.loc.line, errObj.loc.column)
+        	}
+	    } as any);
+    }
+};
+/**
+ * エラー箇所の周辺コードスニペット
+ * @param {string} code 
+ * @param {number} line 
+ * @param {number} column 
+ * @returns 
+ */
+const generateCodeFrame = (code: string, line: number, column: number): string => {
+	const lines = code.split('\n');
+	const start = Math.max(0, line - 3);
+	const end = Math.min(lines.length, line + 3);
+	return lines.slice(start, end).map((l, i) => {
+		const currentLineNum = start + i + 1;
+		const isTarget = currentLineNum === line;
+		const prefix = isTarget ? `> ${currentLineNum} | ` : `  ${currentLineNum} | `;
+		const pointer = isTarget ? `\n    | ${' '.repeat(column - 1)}^` : '';
+		return `${prefix}${l}${pointer}`;
+	}).join('\n');
+}
+
+type SERVER = {server : ViteDevServer | null};
+
+/** ViteServerを保持するオブジェクト */ 
+export const ServerObj: SERVER = {
+	server: null,
+}
+
+type CONFIG = {viteConfig: ResolvedConfig | null}
+/** 
+ * ViteConfig格納オブジェクト 
+ */
+export const ViteConfigObj: CONFIG = {
+    viteConfig: null,
+}
+
+/**
+ * Vite 管理下のソースであることを確認する
+ * @param {SourceFile} targetSourceFile 
+ * @returns 
+ */
+export const isInsideTargetSrc: IsInsideTarget = (targetSourceFile: SourceFile): boolean => {
+        if(!ViteConfigObj.viteConfig){
+          // viteConfigの格納は『configResolved』で実施している
+          throw new Error("configResolvedの不具合によりViteConfigがundefinedである")
+        }
+        // config.root は必ず絶対パスで取得できます
+        const projectRoot = ViteConfigObj.viteConfig.root;
+        // vite.config.ts に書かれている root ディレクトリの絶対パスを正確に組み立てる
+        const definedSrcDir = normalizePath(projectRoot)
+
+        const targetFilePath = targetSourceFile.getFilePath();
+        // パスの正規化（OSによる区切り文字 '\' と '/' の違いを吸収）
+        const normalizedTargetPath = normalizePath(targetFilePath);
+        const normalizedSrcDir = normalizePath(definedSrcDir); //definedSrcDir);
+        const _isInsideTargetSrc = normalizedTargetPath.startsWith(normalizedSrcDir);
+        return _isInsideTargetSrc;
+      }
+
 /**
  * 指定したノードを囲んでいる最寄りの親関数ノードを返す
+ * @param {ts.Node} node
  */
 export const findParentFunction = function (node: ts.Node): ts.FunctionLikeDeclaration | undefined {
     let current: ts.Node | undefined = node.parent;
@@ -32,7 +168,10 @@ export const findParentFunction = function (node: ts.Node): ts.FunctionLikeDecla
     return undefined;
 }
 
-/** Generator関数（function*）であるかの判定 */
+/** 
+ * Generator関数（function*）であるかの判定 
+ * @param {ts.FunctionLikeDeclaration} node 
+ */
 export const isGenerator = function (node: ts.FunctionLikeDeclaration): boolean {
   // アロー関数やコンストラクタなど、asteriskToken を持ち得ないノードを除外
   if ("asteriskToken" in node && node.asteriskToken) {
@@ -41,7 +180,10 @@ export const isGenerator = function (node: ts.FunctionLikeDeclaration): boolean 
   return false;
 }
 
-/** Async Generator関数（async function*）であるかの判定 */
+/** 
+ * Async Generator関数（async function*）であるかの判定
+ * @param {ts.FunctionLikeDeclaration} node 
+ */
 export const isAsyncGenerator = function (node: ts.FunctionLikeDeclaration): boolean {
   // function* (Generator) であることが大前提
   if (!isGenerator(node)) return false;
@@ -50,7 +192,10 @@ export const isAsyncGenerator = function (node: ts.FunctionLikeDeclaration): boo
   return hasAsyncModifier(node);
 }
 
-/** 補助関数: async 修飾子を持っているかチェック */ 
+/** 
+ * 補助関数: async 修飾子を持っているかチェック 
+ * @param {ts.Node} node
+ */ 
 const hasAsyncModifier = function (node: ts.Node): boolean {
   // TypeScript 5.0以降の推奨スタイル（canHaveModifiers + getModifiers）
   if (ts.canHaveModifiers(node)) {

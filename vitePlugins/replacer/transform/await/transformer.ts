@@ -3,7 +3,8 @@ import MagicString from 'magic-string';
 import awaitTargetsJson from '../../json/targetAwait.json' with { type: 'json' };
 import * as path from 'path';
 import * as TagMark from '../../TagMarks.ts';
-import type { ErrorObj, EmitErrorWrapper } from '../../helper.ts';
+import type { ErrorObj } from '../../helper.ts';
+import * as Helper from '../../helper.ts';
 
 export const getAwaitTargets = (): [string[], string[] ] => {
     const list:string[] = [];
@@ -36,14 +37,12 @@ function getOrInitProject(): Project {
  * なお、このメソッドでは「MagicString」と「ts-morph」を使用している
  * @param {string} code コード 
  * @param {string} id ファイルパス 
- * @param {EmitErrorWrapper} emitError 独自エラーメッセージ送信するメソッド
  * 
  * @returns 
  */
 export function transform(
     code: string, 
-    id: string, 
-    emitError: EmitErrorWrapper,
+    id: string
 ): { code: string; map: any } {
 
     // プロジェクトの再作成をすることで キャッシュの衝突回避対応は不要です
@@ -125,9 +124,10 @@ export function transform(
                                     const errObj : ErrorObj = {
                                         message: 'このメソッドを呼び出すには上位関数を『async』にする必要があります',
                                         id: id,
-                                        loc: { line: lineNo, column: columnNo } // オプション: エラー箇所の行・列
+                                        loc: { line: lineNo, column: columnNo }, // オプション: エラー箇所の行・列
+                                        customSend: true,
                                     };
-                                    emitError(errObj);
+                                    Helper.emitError(errObj);
                                 }else{
                                     const start = callExpr.getStart();
                                     // 左側に("await ")を追加する

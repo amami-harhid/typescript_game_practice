@@ -1,25 +1,20 @@
 import * as ts from 'typescript';
-import { normalizePath } from 'vite';
 import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite';
 import * as path from 'path';
 import remapping from '@ampproject/remapping';
 import fs from 'fs'; 
 
 import * as Cache from './memoryCache.ts';
-import * as helper from './helper.ts';
+import * as Helper from './helper.ts';
 import * as AsyncGenerator from './transform/asyncGenerator/transformer.ts'
 import * as Await from './transform/await/transformer.ts';
 import * as LoopYield from './transform/loopYield/transformer.ts';
-import { SourceFile } from 'ts-morph';
+
 
 export function vitePluginAutoAwait(): Plugin {
 	let compilerOptions: ts.CompilerOptions = {};
-	let server: ViteDevServer | null = null;
 	/** ファイルパスごとの最終エラー時刻を記録するMap */
-	const lastErrorCache = new Map<string, number>();
 	/** vite.config.ts で定義する『root』ディレクトリの絶対パス */ 
-	const DefinedSrcDir = 'D:/projects/ts-scratch3/typescript_game_practice/src';
-	let definedSrcDir = DefinedSrcDir;
 	return {
 		name: 'vite-plugin-auto-replacing',
     	enforce: 'pre',
@@ -33,7 +28,7 @@ export function vitePluginAutoAwait(): Plugin {
 		},
 		// 開発サーバーのインスタンスを保持する
     	configureServer(_server) {
-    		server = _server;
+			Helper.ServerObj.server = _server;
     	},
 		hotUpdate(ctx) {
 			// Vite 8では、ブラウザ用のコードを処理する client 環境 と、サーバーサイド（SSRやVite自体の処理）用の
@@ -51,6 +46,7 @@ export function vitePluginAutoAwait(): Plugin {
 			// インポート(直接的・間接的)する親ファイルを探し出しています。
 			// 親ファイルのキャッシュ情報を破棄することで、必要な全てのコード置換を発生させています。
 			const fileName = ctx.file;
+			
 			if(fileName.endsWith(".ts")){
 				//console.log('hotUpdate ==> full-reload')
 				Cache.MemoryCache.clear();
@@ -83,17 +79,11 @@ export function vitePluginAutoAwait(): Plugin {
 		},
 		// Viteの設定が確定したタイミングで呼び出されるフック
 		configResolved(config: ResolvedConfig) {
-			// config.root は必ず絶対パスで取得できます
-			const projectRoot = config.root;
-			//console.log('projectRoot=', projectRoot);
-			// vite.config.ts に書かれている root ディレクトリの絶対パスを正確に組み立てる
-			//console.log('path=', path)
-			definedSrcDir = normalizePath(projectRoot)
-				//definedSrcDir = normalizePath(path.normalize(path.resolve(DefinedSrcDir,'')))
-			//console.log('definedSrcDir=', definedSrcDir);
+			Helper.ViteConfigObj.viteConfig = config;
 		},
     	// プロジェクト起動時に tsconfig.json を読み込んで、型環境を完全に構築する
     	buildStart() {
+
       		const configPath = ts.findConfigFile(process.cwd(), ts.sys.fileExists, 'tsconfig.json');
       		if (!configPath) {
         		console.error("tsconfig.json が見つかりません。");
@@ -112,136 +102,23 @@ export function vitePluginAutoAwait(): Plugin {
         		sourceMap: true,       // これにより、emit時に元の位置に紐づくマップが自動生成されます
         		inlineSources: true,   // 元のコードをマップに含める
 			}
-    	},
+
+			// エラーオーバーレイキャッシュをクリア
+			Helper.lastErrorOverlayCache.clear();
+			
+
+		},
 	    transform(code, id) {
 			const [_id] = id.split('?');
-			/** 
-			 * キャッシュを強制クリアするヘルパー関数
-			 * TSコードを修正保存するときホットリロードされるが
-			 * 関連するファイル全てについて置換処理（１段目、２段目、３段目）のやり直しを
-			 * させたい。エラー発生したときにはキャッシュ強制クリアをペアで行うものとする
-			 */ 
-			const clearCache: helper.ClearCache = () => {
-        		if (server) {
-          			const moduleNode = server.moduleGraph.getModuleById(id);
-          			if (moduleNode) {
-            			// モジュールグラフからこのファイルのキャッシュを無効化
-            			server.moduleGraph.invalidateModule(moduleNode);
-          			}
-        		}
-			}
-			/**
-			 * エラー発生時のラッパー関数
-			 * Viteの開発サーバー（HMR）の二重ロード仕様によるエラーメッセージ２重呼出しを回避させる意図で
-			 * 用意したエラーラッパー関数です。
-			 * 
-			 * 開発時には「プリトランスパイル（Pre-transform）」と
-			 * 「実際のモジュール構築（Internal server/Bundle）」の２つのフェーズで
-			 * transformフックが呼び出されます。
-			 * そのため、２回連続でエラーが起こることになり少々目障り感があります。
-			 * 短い間隔でエラーが起きる場合は、２回目のエラー表示を無視するようにします。
-			 */ 
-    	  	const emitErrorWrapper: helper.EmitErrorWrapper = (errObj: helper.ErrorObj) => {
-
-				if(errObj.customSend && errObj.customSend === true){
-					emitErrorServer(errObj);
-					return;
-				}
-
-				//console.log('Sending error for:', errObj.id)
-				const errorTargetId = errObj.id;
-				const now = Date.now();
-				const lastErrorTime = lastErrorCache.get(errorTargetId) || 0;
-				// 前回のエラーから 500ms 以内の場合は、Viteの重複リクエストとみなして処理をスルーする
-				if (now - lastErrorTime < 500) {
-					// すでに1回目でブラウザにエラーは送られているため
-					// 2回目はビルドをクラッシュさせずに静かにプロセスを終了させます
-					return
-				}
-				clearCache();// エラー時には、キャッシュ強制クリアが必須です
-				// タイムスタンプを更新
-				lastErrorCache.set(errorTargetId, now);
-				// 本物の Vite エラーを実行
-				//console.log('error reached')
-				//console.log('this.error=', this.error)
-				//console.log('errObj=', errObj);
-				this.error(errObj);
-    		};
-    	  	const emitErrorServer: helper.EmitErrorWrapper = (errObj: helper.ErrorObj) => {
-
-				//console.log('Sending error for:', errObj.id)
-				const errorTargetId = errObj.id;
-				const now = Date.now();
-				const lastErrorTime = lastErrorCache.get(errorTargetId) || 0;
-				// 前回のエラーから 500ms 以内の場合は、Viteの重複リクエストとみなして処理をスルーする
-				if (now - lastErrorTime < 500) {
-					// すでに1回目でブラウザにエラーは送られているため
-					// 2回目はビルドをクラッシュさせずに静かにプロセスを終了させます
-					//throw new Error('VITE_PLUGIN_HANDLED_ERROR');
-					return;
-				}
-				clearCache();// エラー時には、キャッシュ強制クリアが必須です
-				// タイムスタンプを更新
-				lastErrorCache.set(errorTargetId, now);
-
-				if(server) {
-					// 🌟 ws.send('error') を使う場合、画面にコードスニペットを出すには「生のファイルコード」を frame に載せる必要があります
-					let fileContent = '';
-					try{
-						fileContent = fs.readFileSync(errObj.id, 'utf-8');
-					}catch (e) {
-						fileContent = code; // 読み込めなければ現在のコードで代用
-					}
-					// Viteのクライアントへ直接エラーイベントを発火（Viteがパスを上書きするのを防ぐ）
-					server.ws.send({
-						type: 'error',
-						err: {
-							message: errObj.message,
-							plugin: 'vite-plugin-auto-replacing',
-							id: errObj.id, // 🌟 これで別ファイルの絶対パスがそのまま届く
-							loc: errObj.loc,
-							// 🌟 stack プロパティが必須なので、簡易的なトレース文字列を生成して渡す
-							stack: `Error: ${errObj.message}\n    at ${errObj.id}:${errObj.loc.line}:${errObj.loc.column}`,
-							// エラー箇所の周辺コードスニペットを組み立てて渡す（ViteのError Overlay用）
-							frame: generateCodeFrame(fileContent, errObj.loc.line, errObj.loc.column)
-						}
-					} as any);
-				}
-    		};
-			const isInsideTargetSrc: helper.IsInsideTarget = (targetSourceFile: SourceFile): boolean => {
-				const targetFilePath = targetSourceFile.getFilePath();
-				// パスの正規化（OSによる区切り文字 '\' と '/' の違いを吸収）
-				const normalizedTargetPath = normalizePath(targetFilePath);
-				const normalizedSrcDir = normalizePath(definedSrcDir); //definedSrcDir);
-				const _isInsideTargetSrc = normalizedTargetPath.startsWith(normalizedSrcDir);
-				// if(_isInsideTargetSrc == false){
-				// 	console.log('normalizedTargetPath=', normalizedTargetPath)
-				// }
-				return _isInsideTargetSrc;
-			}
-			const generateCodeFrame = (code: string, line: number, column: number): string => {
-				const lines = code.split('\n');
-				const start = Math.max(0, line - 3);
-				const end = Math.min(lines.length, line + 3);
-				return lines.slice(start, end).map((l, i) => {
-    				const currentLineNum = start + i + 1;
-    				const isTarget = currentLineNum === line;
-    				const prefix = isTarget ? `> ${currentLineNum} | ` : `  ${currentLineNum} | `;
-    				const pointer = isTarget ? `\n    | ${' '.repeat(column - 1)}^` : '';
-    				return `${prefix}${l}${pointer}`;
-				}).join('\n');
-			}
+			
     		// node_modules やに対象外のファイルはスルー
-			if( helper.isTargetIdExcluded(_id)) {
+			if( Helper.isTargetIdExcluded(_id)) {
 				return null;
 			}
-			// this(TransformPluginContext)配下とする
-			const emitError = emitErrorWrapper.bind(this);
+			
 			// ステップ１
 			// async generator化
-			const asyncGeneratorTransformResult = AsyncGenerator.transform(code,_id, isInsideTargetSrc, emitError);
-			//console.log('asyncGeneratorTransformResult##################')
-			//console.log(asyncGeneratorTransformResult.code)
+			const asyncGeneratorTransformResult = AsyncGenerator.transform(code,_id);
 			
 			if(asyncGeneratorTransformResult.forceError === true) {
 				return { code: '', map: null};
@@ -249,9 +126,7 @@ export function vitePluginAutoAwait(): Plugin {
 			// ステップ２
 			// await 追加( + 必要に応じて親メソッド定義を async にする)
 			// (magicStringを使う)
-			const awaitTransformResult = Await.transform(asyncGeneratorTransformResult.code, _id, emitError);
-			//console.log('awaitTransformResult##################')
-			//console.log(awaitTransformResult.code)
+			const awaitTransformResult = Await.transform(asyncGeneratorTransformResult.code, _id);
 			
 			// ステップ３
 			// 繰り返しループの中に yieldをつける ( + 必要に応じて親メソッドを Generator関数にする )
@@ -264,7 +139,7 @@ export function vitePluginAutoAwait(): Plugin {
 					// TypeScript 本来の構文変換の前に
 					// 自作の変換処理（トランスフォーマー）を実行させる
                 	before: [
-                        (context) => LoopYield.transform(id, context, emitError)
+                        (context) => LoopYield.transform(id, context)
                     ]
                 }
 			});
@@ -289,7 +164,6 @@ export function vitePluginAutoAwait(): Plugin {
 				code: finalCode, 
 				map: mergedMap as any,
 			}
-
 		}
 	}
 } 
