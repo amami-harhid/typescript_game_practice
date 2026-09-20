@@ -1,5 +1,6 @@
 import { Sprite } from './lib/sprite';
 import * as Thread from './sub/threads';
+import { outSideFunc } from '../../../lib/test';
 
 const sprite = new Sprite();
 
@@ -53,3 +54,6 @@ sprite.Thread.func = obj02_02;
 sprite.Thread.func = obj02_03;
 sprite.Thread.func = obj02_04;
 
+sprite.Thread.func = outSideFunc; //Thread.outSideFunction;
+// aaa
+outSideFunc();

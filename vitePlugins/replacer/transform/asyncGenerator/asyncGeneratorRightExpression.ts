@@ -1,10 +1,10 @@
 import * as ts from 'typescript';
 import { ArrowFunction, Expression, Node, SourceFile, SyntaxKind } from "ts-morph";
-import { EmitErrorWrapper } from '../../helper.ts';
+import * as Helper from '../../helper.ts';
 import * as Replacer from './asyncGeneratoReplacer.ts';
 import { tracer } from './tracer.ts';
 
-const finalNodeAction = (id: string, finalNode: Node<ts.Node>, sourceFile: SourceFile, emitError: EmitErrorWrapper) => {
+const finalNodeAction = (id: string, finalNode: Node<ts.Node>, sourceFile: SourceFile, emitError: Helper.EmitErrorWrapper) => {
     let hasChanged = false;
             const targetFile = finalNode.getSourceFile();
             if(sourceFile == targetFile){
@@ -56,160 +56,65 @@ const finalNodeAction = (id: string, finalNode: Node<ts.Node>, sourceFile: Sourc
             }
     return {hasChanged: false, forceError: false};
 }
+const outSideError = (node : Expression<ts.Expression>)  :Helper.ErrorObj => {
 
+    // 行番号
+    const lineNo = node.getStartLineNumber();
+    // 列番号 = ノード全体の開始位置 - 行の開始位置 + 1 
+    const columnNo = node.getStart() - node.getStartLinePos() + 1;
+    // 先にTS-Morphメモリを解放する(エラー表示後のホットリロード時に全コードの整合性を保つ)ために【A】を行う
+    // 【A】ts-morph のメモリ解放
+    const sourceFile = node.getSourceFile();
+    //sourceFile.forget();
+    const id = sourceFile.getFilePath();
+    const errObj : Helper.ErrorObj = {
+        message: '定義元が範囲外にあるためスレッドとして使用できません',
+        id: id,
+        loc: { line: lineNo, column: columnNo }, // オプション: エラー箇所の行・列
+        customSend: true,
+    };
+    return errObj;
+}
 /**
  * 左側の置換処理
  * @param {string} id 対象ファイルのパス
  * @param {Expression<ts.Expression>} rightExpression 左部のExpression 
  * @param {SourceFile} sourceFile 
+ * @param {IsInsideTarget} isInsideTarget
  * @param {EmitErrorWrapper} emitError 
  * @returns 
  */
-export const replacer = (id:string, rightExpression: Expression<ts.Expression>, sourceFile: SourceFile, emitError: EmitErrorWrapper): {hasChanged:boolean, forceError?: boolean} => {
+export const replacer = (id:string, rightExpression: Expression<ts.Expression>, sourceFile: SourceFile, isInsideTarget: Helper.IsInsideTarget, emitError: Helper.EmitErrorWrapper): {hasChanged:boolean, forceError?: boolean} => {
     let hasChanged = false;
     // 右側が『PropertyAccessExpression』のとき
     // クラスインスタンスメソッドまたはリテラルオブジェクトのメソッドの場合が想定される
     if (rightExpression.getKind() === SyntaxKind.PropertyAccessExpression){
-        const finalNode = tracer(rightExpression);
+        const finalNode = tracer(rightExpression, isInsideTarget);
         if(finalNode == undefined){
-            console.log('finalNode is undefined');
+            //console.log('finalNode is undefined [001]');
+            const errObj = outSideError(rightExpression);
+            emitError(errObj);
+
         }
         if(finalNode){
             hasChanged = true;
             const rtn = finalNodeAction(id, finalNode, sourceFile, emitError);
             hasChanged = rtn.hasChanged;
         }
-        
-    //     const rightPropertyAccess = rightExpression.asKindOrThrow(SyntaxKind.PropertyAccessExpression);
-
-    //     const symbol = rightPropertyAccess.getNameNode().getSymbol();
-    //     if (symbol) {
-    //         // そのシンボルが定義されている元の宣言（Node）を取得
-    //         const declarations = symbol.getDeclarations();
-
-    //         // クラスの MethodDeclaration (メソッド宣言) が見つかる(最初のノードを返す)
-    //         const methodDecl = declarations.find(d => d.getKind() === SyntaxKind.MethodDeclaration);
-    //         const propertyDecl = declarations.find(d => d.getKind() === SyntaxKind.PropertyAssignment);
-
-    //         // メソッドのとき ( Arrow関数の考慮は不要 )
-    //         if (methodDecl && methodDecl.getKind() == SyntaxKind.MethodDeclaration) {
-                
-    //             const targetFile = methodDecl.getSourceFile();
-    //             let isSameSourceFile = true;
-    //             if(targetFile != sourceFile) {
-    //                 // 宣言が別ファイルのとき
-    //                 isSameSourceFile = false;
-    //             }
-                
-                
-    //             const _method = methodDecl.asKindOrThrow(SyntaxKind.MethodDeclaration)
-                
-    //             if(!(_method.isAsync() && _method.isGenerator())) {
-    //                 // Async & Generatorでないとき
-    //                 if(!isSameSourceFile){
-    //                     //console.log('別ファイル')
-    //                     Replacer.methodToAsyncGeneratorAnotherFile(_method, targetFile);
-    //                 }else{
-    //                     Replacer.methodToAsyncGenerator(_method);
-    //                     hasChanged = true;
-    //                 }
-    //             }
-    //         }else 
-    //         // リテラルオブジェクトのとき ( Arrow関数をかけるので Arrow関数の考慮が必要 )
-    //         if (propertyDecl && propertyDecl.getKind()==SyntaxKind.PropertyAssignment) {
-
-    //             const targetFile = propertyDecl.getSourceFile();
-    //             let isSameSourceFile = true;
-    //             if(targetFile != sourceFile) {
-    //                 // 宣言が別ファイルのとき
-    //                 isSameSourceFile = false;
-    //             }
-
-    //             const _propertyAssgnment = propertyDecl.asKindOrThrow(SyntaxKind.PropertyAssignment)
-    //             const right = _propertyAssgnment.getLastChild();
-
-    //             // Functionの場合
-    //             if(right && right.getKind()=== SyntaxKind.FunctionExpression){
-    //                 const _func = right.asKindOrThrow(SyntaxKind.FunctionExpression);
-    //                 if(_func){
-    //                     if(isSameSourceFile) {
-    //                         hasChanged = Replacer.funcToAsyncGenerator(_func);
-    //                         hasChanged = true;
-
-    //                     }else{
-    //                         Replacer.funcToAsyncGeneratorAnotherFile(_func, targetFile);
-    //                     }
-    //                 }
-    //             }else 
-    //             // アロー関数の場合    
-    //             if(right && right.getKind()=== SyntaxKind.ArrowFunction){
-
-    //                 // アロー関数はスレッド化には不適なのでエラーとする
-    //                 const func = right.asKindOrThrow(SyntaxKind.ArrowFunction);
-    //                 if(isSameSourceFile) {
-    //                     Replacer.arrowFuncErrorAction(id, func, sourceFile, emitError);
-
-    //                 }else{
-    //                     //console.log(func.getText())
-    //                     // アロー関数のとき（かつ他のファイルのとき）エラーにする
-    //                     Replacer.arrowFuncErrorActionAnotherFile(func, sourceFile, targetFile, emitError);
-    //                     return {hasChanged: false, forceError: true};
-    //                 }
-
-
-    //             }
-    //         }
-    //     }
     }
     // 右側が「識別子（名前）」(Identifier)のとき
     if (rightExpression.getKind() === SyntaxKind.Identifier) {
         const rightIdentifier = rightExpression.asKindOrThrow(SyntaxKind.Identifier);
-        const finalNode = tracer(rightIdentifier);
+        const finalNode = tracer(rightIdentifier, isInsideTarget);
         if(finalNode == undefined){
-            console.log('finalNode is undefined');
+            //console.log('finalNode is undefined [002]');
+            const errObj = outSideError(rightExpression);
+            emitError(errObj);
         }
         if(finalNode){
             const rtn = finalNodeAction(id, finalNode, sourceFile, emitError);
             hasChanged = rtn.hasChanged;
         }
-        // // ts-morphの機能：変数の「定義元（宣言）」を直接取得する
-        // const definitions = rightIdentifier.getDefinitions();
-        // for (const def of definitions) {
-        //     const declarationNode = def.getDeclarationNode();
-        //     if (!declarationNode) continue;
-        //     const targetFile = declarationNode.getSourceFile();
-        //     let isSameSourceFile = true;
-        //     if(targetFile != sourceFile) {
-        //         // 宣言が別ファイルのとき
-        //         isSameSourceFile = false;
-        //     }
-            
-        //     // 変数宣言（const XXX = ...）であるか確認
-        //     if (declarationNode.getKind() === SyntaxKind.VariableDeclaration) {
-        //         const variableDeclarator = declarationNode.asKindOrThrow(SyntaxKind.VariableDeclaration);
-        //         const initializer = variableDeclarator.getInitializer();
-        //         if(initializer){
-        //             //console.log(SyntaxKind.MethodDeclaration)
-        //             // 通常の関数式 (function() {}) の場合
-        //             if (initializer.getKind() === SyntaxKind.FunctionExpression) {
-        //                 // 宣言が別ファイルのとき
-        //                 if(!isSameSourceFile){
-        //                     //console.log('別ファイルで 置換')
-        //                     const func = initializer.asKindOrThrow(SyntaxKind.FunctionExpression);
-        //                     Replacer.funcToAsyncGeneratorAnotherFile(func, targetFile);
-        //                 }else{
-        //                     //console.log('同一ファイルで funcToAsyncGenerator')
-        //                     hasChanged = Replacer.funcToAsyncGenerator(initializer);
-        //                 }
-        //             } else if (initializer.getKind() === SyntaxKind.ArrowFunction) {
-        //                 // もしアロー関数 (async () => {}) だった場合の考慮
-        //                 // （アロー関数は generator になれないため、通常の関数式へ変換が必要）
-        //                 // アロー関数を async function* () {} の文字列に置き換える
-        //                 hasChanged = Replacer.arrowToAsyncGenerator(initializer);
-        //             }
-        //         }
-        //     }
-        // }
     }else {
         // セッターに変数を代入していない場合の処理
         // すなわちセッターに関数を代入していることになるが、そのときは同一ファイルになるので

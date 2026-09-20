@@ -175,8 +175,8 @@ export const arrowFuncErrorActionAnotherFile = function(func: ArrowFunction, sou
     const errObj : ErrorObj = {
         message: 'Arrow関数はスレッド化できません[002]',
         id: anotherFileId,
-        loc: { line: lineNo, column: columnNo } // オプション: エラー箇所の行・列
+        loc: { line: lineNo, column: columnNo }, // オプション: エラー箇所の行・列
+        customSend: true,
     };
-    errObj.isAnotherFile = true;
     emitError(errObj);
 }

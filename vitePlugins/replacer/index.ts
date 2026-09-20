@@ -1,5 +1,6 @@
 import * as ts from 'typescript';
-import type { Plugin, ViteDevServer } from 'vite';
+import { normalizePath } from 'vite';
+import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite';
 import * as path from 'path';
 import remapping from '@ampproject/remapping';
 import fs from 'fs'; 
@@ -9,12 +10,16 @@ import * as helper from './helper.ts';
 import * as AsyncGenerator from './transform/asyncGenerator/transformer.ts'
 import * as Await from './transform/await/transformer.ts';
 import * as LoopYield from './transform/loopYield/transformer.ts';
+import { SourceFile } from 'ts-morph';
 
 export function vitePluginAutoAwait(): Plugin {
 	let compilerOptions: ts.CompilerOptions = {};
 	let server: ViteDevServer | null = null;
 	/** ファイルパスごとの最終エラー時刻を記録するMap */
 	const lastErrorCache = new Map<string, number>();
+	/** vite.config.ts で定義する『root』ディレクトリの絶対パス */ 
+	const DefinedSrcDir = 'D:/projects/ts-scratch3/typescript_game_practice/src';
+	let definedSrcDir = DefinedSrcDir;
 	return {
 		name: 'vite-plugin-auto-replacing',
     	enforce: 'pre',
@@ -76,6 +81,17 @@ export function vitePluginAutoAwait(): Plugin {
 				return [];
 			}
 		},
+		// Viteの設定が確定したタイミングで呼び出されるフック
+		configResolved(config: ResolvedConfig) {
+			// config.root は必ず絶対パスで取得できます
+			const projectRoot = config.root;
+			//console.log('projectRoot=', projectRoot);
+			// vite.config.ts に書かれている root ディレクトリの絶対パスを正確に組み立てる
+			//console.log('path=', path)
+			definedSrcDir = normalizePath(projectRoot)
+				//definedSrcDir = normalizePath(path.normalize(path.resolve(DefinedSrcDir,'')))
+			//console.log('definedSrcDir=', definedSrcDir);
+		},
     	// プロジェクト起動時に tsconfig.json を読み込んで、型環境を完全に構築する
     	buildStart() {
       		const configPath = ts.findConfigFile(process.cwd(), ts.sys.fileExists, 'tsconfig.json');
@@ -127,7 +143,7 @@ export function vitePluginAutoAwait(): Plugin {
 			 */ 
     	  	const emitErrorWrapper: helper.EmitErrorWrapper = (errObj: helper.ErrorObj) => {
 
-				if(errObj.isAnotherFile && errObj.isAnotherFile === true){
+				if(errObj.customSend && errObj.customSend === true){
 					emitErrorServer(errObj);
 					return;
 				}
@@ -147,6 +163,8 @@ export function vitePluginAutoAwait(): Plugin {
 				lastErrorCache.set(errorTargetId, now);
 				// 本物の Vite エラーを実行
 				//console.log('error reached')
+				//console.log('this.error=', this.error)
+				//console.log('errObj=', errObj);
 				this.error(errObj);
     		};
     	  	const emitErrorServer: helper.EmitErrorWrapper = (errObj: helper.ErrorObj) => {
@@ -189,11 +207,18 @@ export function vitePluginAutoAwait(): Plugin {
 						}
 					} as any);
 				}
-
-				// 本物の Vite エラーを実行
-				//console.log('error reached')
-				//this.error(errObj);
     		};
+			const isInsideTargetSrc: helper.IsInsideTarget = (targetSourceFile: SourceFile): boolean => {
+				const targetFilePath = targetSourceFile.getFilePath();
+				// パスの正規化（OSによる区切り文字 '\' と '/' の違いを吸収）
+				const normalizedTargetPath = normalizePath(targetFilePath);
+				const normalizedSrcDir = normalizePath(definedSrcDir); //definedSrcDir);
+				const _isInsideTargetSrc = normalizedTargetPath.startsWith(normalizedSrcDir);
+				// if(_isInsideTargetSrc == false){
+				// 	console.log('normalizedTargetPath=', normalizedTargetPath)
+				// }
+				return _isInsideTargetSrc;
+			}
 			const generateCodeFrame = (code: string, line: number, column: number): string => {
 				const lines = code.split('\n');
 				const start = Math.max(0, line - 3);
@@ -214,7 +239,7 @@ export function vitePluginAutoAwait(): Plugin {
 			const emitError = emitErrorWrapper.bind(this);
 			// ステップ１
 			// async generator化
-			const asyncGeneratorTransformResult = AsyncGenerator.transform(code,_id, emitError);
+			const asyncGeneratorTransformResult = AsyncGenerator.transform(code,_id, isInsideTargetSrc, emitError);
 			//console.log('asyncGeneratorTransformResult##################')
 			//console.log(asyncGeneratorTransformResult.code)
 			

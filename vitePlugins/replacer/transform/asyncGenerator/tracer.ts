@@ -1,18 +1,29 @@
 import * as ts from 'typescript';
 import { Node, SyntaxKind } from "ts-morph";
+import * as Helper from '../../helper.ts';
 
-export const tracer = (node : Node<ts.Node>) => {
+/**
+ * スレッドセッターに代入する「ノード」の定義を追跡し
+ * PropertyAssignment、PropertyAccessExpression、Identifierで
+ * ある間、定義元をたどっていく。
+ * 
+ * @param {Node<ts.Node>} node 
+ * @param {IsInsideTarget} isInsideTarget 
+ * @returns 
+ */
+export const tracer = (node : Node<ts.Node>, isInsideTarget: Helper.IsInsideTarget) => {
     if (node.getKind() === SyntaxKind.PropertyAccessExpression || node.getKind() === SyntaxKind.Identifier){
         let traceNode = getDefinition(node);
         const continuedCondition = (node:Node<ts.Node>|undefined) => {
-            if(node) 
+            if(node) {
                 return ( 
                     node.getKind()=== SyntaxKind.PropertyAssignment ||
                     node.getKind()=== SyntaxKind.PropertyAccessExpression ||
                     node.getKind()=== SyntaxKind.Identifier
                 )
-            else
+            }else{
                 return false;
+            }
         }
 
         let trace = continuedCondition(traceNode)
@@ -24,8 +35,13 @@ export const tracer = (node : Node<ts.Node>) => {
             trace = continuedCondition(traceNode);
         }
         if(traceNode){
-            //console.log("[tracer 001] ", traceNode.getText(), traceNode.getKindName());
-            return traceNode;
+            const targetSourceFile = traceNode.getSourceFile();
+            const _isInside = isInsideTarget(targetSourceFile);
+            if(_isInside){
+                // Viteルート配下にあるときは 探索したノードを返す
+                //console.log("[tracer 001] ", traceNode.getText(), traceNode.getKindName());
+                return traceNode;
+            }
         }
     }
     return undefined;

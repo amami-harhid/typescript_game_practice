@@ -16,10 +16,9 @@ import MagicString from 'magic-string';
 import * as path from 'path';
 import targetThreadSetter from '../../json/targetThreadSetter.json' with { type: 'json' };
 import * as TagMark from '../../TagMarks.ts';
-import { EmitErrorWrapper } from '../../helper.ts';
+import * as Helper from '../../helper.ts';
 import * as REPLACER from './asyncGeneratoReplacer.ts';
 import * as RightExpression from './asyncGeneratorRightExpression.ts'
-import { tracer } from './tracer.ts';
 
 // トランスフォーマーを呼び出すごとに新しくProjectを作る
 function getOrInitProject(): Project {
@@ -41,10 +40,11 @@ function getOrInitProject(): Project {
  * なお、このメソッドでは「MagicString」と「ts-morph」を使用している
  * @param {string} code コード 
  * @param {string} id ファイルパス 
+ * @param {IsInsideTarget} isInsideTarget Vite管理下にあるソースかを確認するユーティリティ
  * @param {EmitErrorWrapper} emitError 独自エラーメッセージ送信するメソッド
  * @returns 
  */
-export function transform(code: string, id: string, emitError: EmitErrorWrapper ): { code: string; map: any, forceError: boolean } {
+export function transform(code: string, id: string, isInsideTarget: Helper.IsInsideTarget, emitError: Helper.EmitErrorWrapper ): { code: string; map: any, forceError: boolean } {
     const magicString = new MagicString(code)
     const currentProject = getOrInitProject();
     const sourceFile = currentProject.createSourceFile(id, code, { overwrite: true });
@@ -89,7 +89,7 @@ export function transform(code: string, id: string, emitError: EmitErrorWrapper 
                                     if(match) {
                                         // TagMark.THREAD_SETTER_TAGがJSDOCに書かれている場合
                                         // セッターに代入している方を探索して置換処理をする
-                                        const rightRslt = RightExpression.replacer(id, rightExpression, sourceFile, emitError);
+                                        const rightRslt = RightExpression.replacer(id, rightExpression, sourceFile, isInsideTarget, emitError);
                                         hasChanged = rightRslt.hasChanged;
                                         if(rightRslt.forceError && rightRslt.forceError === true){
                                             forceError = rightRslt.forceError;

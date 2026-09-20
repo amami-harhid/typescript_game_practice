@@ -244,12 +244,13 @@ export const transform = (
                 }else if( !helper.isGenerator(parent) && !helper.isAsyncGenerator(parent)) {
                     errorTargetNode = parent; // 親関数
                 }
-                if(errorTargetNode){
+                if(errorTargetNode && parent == undefined){
                     const info = helper.getTsNodeLocation(errorTargetNode);
                     const errObj: ErrorObj = {
                         message: 'Generator関数でない中でyieldを付与できません[001]',
                         id: id,
-                        loc: { line: info.line, column: info.column } // オプション: エラー箇所の行・列
+                        loc: { line: info.line, column: info.column }, // オプション: エラー箇所の行・列
+                        customSend : true,
                     }
                     emitError(errObj);
                 }
@@ -260,10 +261,11 @@ export const transform = (
                         const errObj: ErrorObj = {
                             message: 'Generator関数でない中でyieldを付与できません[002]',
                             id: id,
-                            loc: { line: info.line, column: info.column } // オプション: エラー箇所の行・列
-
+                            loc: { line: info.line, column: info.column }, // オプション: エラー箇所の行・列
+                            customSend : true,
                         }
                         emitError(errObj);
+                        //console.log('==== after emitError ====')
                     }
                 }
 

@@ -6,11 +6,14 @@ import yieldExcludesJson from './json/yieldExcludes.json' with { type: 'json' };
 import targetIdsJson from './json/targetIds.json' with { type: 'json'};
 import awaitTargetsJson from './json/targetAwait.json' with { type: 'json' };
 import { ViteDevServer } from 'vite';
+import { SourceFile } from 'ts-morph';
 
-export type ErrorObj = { message: string; id: string; loc: { line: number; column: number }, isAnotherFile?: boolean };
+export type ErrorObj = { message: string; id: string; loc: { file?: string, line: number; column: number }, customSend?: boolean };
 export type EmitErrorWrapper = (errObj : ErrorObj) => void;
 export type ClearCache = () => void;
 export type ClearCache2 = (id: string, server: ViteDevServer) => void;
+
+export type IsInsideTarget = (targetSourceFile: SourceFile) => boolean
 
 /**
  * 指定したノードを囲んでいる最寄りの親関数ノードを返す

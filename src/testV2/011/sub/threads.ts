@@ -1,5 +1,5 @@
 import { CustomSprite01, CustomSprite02 } from "./customSprite";
-
+import { outSideFunc } from '../../../../lib/test';
 const customSprite01 = new CustomSprite01();
 
 /**
@@ -72,8 +72,12 @@ export const obj02 = {
         for(;;)
             console.log('obj02_04'+p);
     },
-    obj01_05 : (p:string) =>{
-        for(;;)
-            console.log('obj01_04'+p);
-    },
+    // obj01_05 : (p:string) =>{
+    //     for(;;)
+    //         console.log('obj01_04'+p);
+    // },
 }
+
+const outSideFunction = outSideFunc;
+
+export {outSideFunction}
