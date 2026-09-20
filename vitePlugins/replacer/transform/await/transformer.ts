@@ -1,22 +1,10 @@
 import { JSDocTagInfo, Project, PropertyAccessExpression, Symbol, SyntaxKind } from 'ts-morph';
 import MagicString from 'magic-string';
-import awaitTargetsJson from '../../json/targetAwait.json' with { type: 'json' };
+//import awaitTargetsJson from '../../json/targetAwait.json' with { type: 'json' };
 import * as path from 'path';
-import * as TagMark from '../../TagMarks.ts';
+//import * as TagMark from '../../TagMarks.ts';
 import type { ErrorObj } from '../../helper.ts';
 import * as Helper from '../../helper.ts';
-
-export const getAwaitTargets = (): [string[], string[] ] => {
-    const list:string[] = [];
-    const listFull:string[] = [];
-    for(const item of awaitTargetsJson.targets) {
-        list.push( item.name );
-        listFull.push( item.fullName );
-    }
-    return [list, listFull];
-}
-
-const [_, awaitTargetFullMethods] = getAwaitTargets();
 
 /** トランスフォーマーを呼び出すごとに新しくProjectを作る */ 
 function getOrInitProject(): Project {
@@ -98,7 +86,7 @@ export function transform(
             // 例) this.Control.waitのとき "Control.wait"を得る
             const targetText = `${objectName}.${methodName}`;
             // 登録されているときは この callExprのJSDocのチェックをする
-            if( awaitTargetFullMethods.includes(targetText)) {
+            if( Helper.jsonDataObj.tagAwait.targets.fullNames.includes(targetText)) {
                 // JSDOC を取り込む
                 const _objectType = typeChecker.getTypeAtLocation(objectExpression);
                 _objectType.getProperties().some((prop: Symbol)=> {
@@ -109,7 +97,7 @@ export function transform(
                         tags.forEach((tag: JSDocTagInfo)=>{
                             const tagName = tag.getName(); // this.Control.wait(10) ==> wait のJSDOCにある タグ @～
                             //console.log('tagName=', tagName);
-                            const NeedsAwait = TagMark.NEEDS_AWAIT_METHOD_TAG.replace(/^@/, ''); // 先頭の@を消す
+                            const NeedsAwait = Helper.jsonDataObj.tagMarks.NEEDS_AWAIT_METHOD_TAG.replace(/^@/, ''); // 先頭の@を消す
                             if( tagName == NeedsAwait) {
                                 // 直親の関数定義がAsync でないとき
                                 if(!isParentFunctionAsync && parentFunction){

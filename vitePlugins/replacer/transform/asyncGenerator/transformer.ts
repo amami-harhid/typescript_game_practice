@@ -15,7 +15,7 @@ import { Node, Project, SyntaxKind, PropertyAccessExpression, SourceFile, ArrowF
 import MagicString from 'magic-string';
 import * as path from 'path';
 import targetThreadSetter from '../../json/targetThreadSetter.json' with { type: 'json' };
-import * as TagMark from '../../TagMarks.ts';
+//import * as TagMark from '../../TagMarks.ts';
 import * as Helper from '../../helper.ts';
 import * as REPLACER from './asyncGeneratoReplacer.ts';
 import * as RightExpression from './asyncGeneratorRightExpression.ts'
@@ -80,7 +80,7 @@ export function transform(code: string, id: string ): { code: string; map: any, 
                                     const jsDocs = setterDeclaration.getJsDocs();
                                     const match = jsDocs.some((jsDoc)=>{
                                         const jsDocText = jsDoc.getText();
-                                        if(jsDocText.includes( TagMark.THREAD_SETTER_TAG )) {
+                                        if(jsDocText.includes( Helper.jsonDataObj.tagMarks.THREAD_SETTER_TAG )) {
                                             return true;
                                         }
                                     });

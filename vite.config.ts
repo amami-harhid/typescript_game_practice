@@ -7,8 +7,11 @@ import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import { glob } from 'glob'
 import checker from 'vite-plugin-checker';
-import { vitePluginAutoAwait } from './vitePlugins/replacer/index.ts';
+import { vitePluginAutoReplacer } from './vitePlugins/replacer/index.ts';
 //import { vitePluginAutoAwait } from './vitePlugins/tester/index.ts';
+import tagMarks from "./vitePlugins/replacer/json/tagMarks.json" with { type: 'json' };
+import targetThreadSetter from "./vitePlugins/replacer/json/targetThreadSetter.json"  with { type: 'json' };
+import targetAwait from "./vitePlugins/replacer/json/targetAwait.json"  with { type: 'json' };
 
 // ルートとするディレクトリー
 //const root = resolve(import.meta.dirname, './src/')
@@ -41,7 +44,7 @@ export default defineConfig({
     },
     plugins: [
 
-        vitePluginAutoAwait(),
+        vitePluginAutoReplacer(tagMarks, targetThreadSetter, targetAwait),
         checker({
             typescript: true,
             // eslint: {

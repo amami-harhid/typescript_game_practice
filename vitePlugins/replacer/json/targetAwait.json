@@ -1,6 +1,6 @@
 {
-  "targets": [{    
-      "name": "wait",
-      "fullName": "Control.wait"
-  }]
+  "targets": {    
+      "names": ["wait"],
+      "fullNames": ["Control.wait"]
+  }
 }

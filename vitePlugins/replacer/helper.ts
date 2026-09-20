@@ -1,6 +1,6 @@
 import * as ts from 'typescript';
 
-import { LOOP_YIELD_SKIP_TAG } from './TagMarks.ts';
+//import { LOOP_YIELD_SKIP_TAG } from './TagMarks.ts';
 import { minimatch } from 'minimatch';
 import yieldExcludesJson from './json/yieldExcludes.json' with { type: 'json' };
 import targetIdsJson from './json/targetIds.json' with { type: 'json'};
@@ -8,6 +8,30 @@ import awaitTargetsJson from './json/targetAwait.json' with { type: 'json' };
 import { ViteDevServer, ResolvedConfig, normalizePath } from 'vite';
 import { SourceFile } from 'ts-morph';
 import fs from 'fs'; 
+
+/** スレッドセッター*/
+export interface TargetThreadSetter {
+	targets: string[]
+}
+/** タグマーク */
+export interface TagMarks {
+	LOOP_YIELD_SKIP_TAG: string,
+	THREAD_SETTER_TAG: string,
+	NEEDS_AWAIT_METHOD_TAG: string,
+}
+/** Await対象タグ */
+export interface TagAwait {
+	targets: {names: string[], fullNames: string[]}
+}
+
+
+type JsonDataObj = {targetThreadSetter: TargetThreadSetter, tagMarks: TagMarks, tagAwait: TagAwait};
+/** JSONデータ保有オブジェクト */
+export const jsonDataObj: JsonDataObj = {
+	targetThreadSetter: {targets: []},
+	tagMarks: {LOOP_YIELD_SKIP_TAG:"", THREAD_SETTER_TAG:"", NEEDS_AWAIT_METHOD_TAG:""},
+	tagAwait: {targets: {names:[''], fullNames:['']}},
+}
 
 export type ErrorObj = { message: string; id: string; loc: { file?: string, line: number; column: number }, customSend?: boolean };
 export type EmitErrorWrapper = (errObj : ErrorObj) => void;
@@ -268,26 +292,11 @@ export function hasSkipComment(node: ts.Node, sourceFile: ts.SourceFile): boolea
 
     for (const commentRange of leadingComments) {
         const commentText = sourceFile.text.substring(commentRange.pos, commentRange.end);
-        if (commentText.includes( LOOP_YIELD_SKIP_TAG )) {
+        if (commentText.includes( jsonDataObj.tagMarks.LOOP_YIELD_SKIP_TAG )) {
             return true;
         }
     }
     return false;
 }
-
-/**
- * await を付与するメソッド名を配列化して返す。
- * @returns 
- */
-export const getAwaitTargets = (): [string[], string[] ] => {
-    const list:string[] = [];
-    const listFull:string[] = [];
-    for(const item of awaitTargetsJson.targets) {
-        list.push( item.name );
-        listFull.push( item.fullName );
-    }
-    return [list, listFull];
-}
-
 
 

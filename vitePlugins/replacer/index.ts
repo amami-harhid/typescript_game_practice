@@ -2,7 +2,6 @@ import * as ts from 'typescript';
 import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite';
 import * as path from 'path';
 import remapping from '@ampproject/remapping';
-import fs from 'fs'; 
 
 import * as Cache from './memoryCache.ts';
 import * as Helper from './helper.ts';
@@ -11,10 +10,19 @@ import * as Await from './transform/await/transformer.ts';
 import * as LoopYield from './transform/loopYield/transformer.ts';
 
 
-export function vitePluginAutoAwait(): Plugin {
+export function vitePluginAutoReplacer(
+	tagMarks: Helper.TagMarks, 
+	targetThreadSetter: Helper.TargetThreadSetter,
+	tagAwait: Helper.TagAwait
+): Plugin {
+	
+	// 渡されたJSONデータを保存する。
+	Helper.jsonDataObj.tagMarks = tagMarks;
+	Helper.jsonDataObj.targetThreadSetter = targetThreadSetter;
+	Helper.jsonDataObj.tagAwait = tagAwait;
+
 	let compilerOptions: ts.CompilerOptions = {};
-	/** ファイルパスごとの最終エラー時刻を記録するMap */
-	/** vite.config.ts で定義する『root』ディレクトリの絶対パス */ 
+
 	return {
 		name: 'vite-plugin-auto-replacing',
     	enforce: 'pre',
