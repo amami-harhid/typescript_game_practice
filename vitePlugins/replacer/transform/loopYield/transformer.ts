@@ -247,7 +247,7 @@ export const transform = (
                 if(errorTargetNode){
                     const info = helper.getTsNodeLocation(errorTargetNode);
                     const errObj: ErrorObj = {
-                        message: 'Generator関数でない中でyieldを付与できません',
+                        message: 'Generator関数でない中でyieldを付与できません[001]',
                         id: id,
                         loc: { line: info.line, column: info.column } // オプション: エラー箇所の行・列
                     }
@@ -258,7 +258,7 @@ export const transform = (
                     if( !helper.isGenerator(parent) && !helper.isAsyncGenerator(parent)) {
                         const info = helper.getTsNodeLocation(parent);
                         const errObj: ErrorObj = {
-                            message: 'Generator関数でない中でyieldを付与できません',
+                            message: 'Generator関数でない中でyieldを付与できません[002]',
                             id: id,
                             loc: { line: info.line, column: info.column } // オプション: エラー箇所の行・列
 

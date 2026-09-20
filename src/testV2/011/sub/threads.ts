@@ -1,81 +1,79 @@
-import { Sprite } from "../../../lib/sprite";
-import { CustomSprite } from "./customSprite";
+import { CustomSprite01, CustomSprite02 } from "./customSprite";
 
-export const test2 = async function(this:Sprite) {
-    this.degree = 20;
-    // ずっと繰り返す
-    // @ts-loop-yield-skip
-    for(;;){
+const customSprite01 = new CustomSprite01();
 
-        if(this.degree == 0){
-            continue;
-        }
-        if(this.degree == 150){
-            break;
-        }
-        this.Control.wait(20);
-    }
-}
-export const test = async function*(this: CustomSprite) {
-        for(;;){
-            console.log('xxxxxx');
-            this.Control.wait(1);
-        }
-    };
 /**
- * リテラルオブジェクト内の関数をスレッドセッターへ
- * 代入するテスト用です
+ * リテラルオブジェクトにCustomSprite01のインスタンスメソッド
+ * これをExportして スレッドセッターへ代入するとき
+ * スレッド置換を行うことの確認
  */
-export const threadObj = {
-    /**
-     * スレッドセッターへ代入していないときのテスト
-     * ==> asyncGeneratorでない場合はエラーになる
-     * @param this 
-     */
-    thread: async function*(this: CustomSprite) {
-        for(;;){
-            //console.log('abcdefg');
-            this.Control.wait(1);
-        }
-    },
-    /**
-     * アロー関数をスレッドに代入するとエラーになる
-     */
-    thread2: ()=>{
-        console.log('Arrow Function');
-    },
-    /**
-     * リテラルオブジェクトでコンスタントを使うと
-     * そのコンスタント(test)まで追跡しないので
-     * testの方のfunctionは async function* で
-     * ないとエラーになる。追跡の限界である。
-     */
-    thread3: test,
-    /**
-     * スレッドへ代入すると asyncGeneratorに変わる
-     * @param this 
-     */
-    thread4: async function*(this: CustomSprite) {
-        for(;;){
-            //console.log('abcdefg');
-            this.Control.wait(1);
-        }
-    },
-
+export const CustomSpriteObj01 = {
+    thread01_01: customSprite01.thread001,
+    thread01_02: customSprite01.thread002,
+    thread01_03: customSprite01.thread003,
+    thread01_04: customSprite01.thread004,
 }
 
-export class Tester {
-    static threadS() {
-        console.log('static thread');
-    }
-    thread() {
-        console.log('thread');
-    }
+const customSprite02 = new CustomSprite02();
+const customSprite02Thread001 = customSprite02.thread001;
+const customSprite02Thread002 = customSprite02.thread002;
+const customSprite02Thread003 = customSprite02.thread003;
+const customSprite02Thread004 = customSprite02.thread004;
+/**
+ * CustomSprite02のインスタンスメソッドを
+ * 一旦コンスタントに代入し、そのコンスタントを
+ * これをExportして スレッドセッターへ代入するとき
+ * スレッド置換を行うことの確認
+ */
+export const CustomSpriteObj02 = {
+    thread02_01: customSprite02Thread001,
+    thread02_02: customSprite02Thread002,
+    thread02_03: customSprite02Thread003,
+    thread02_04: customSprite02Thread004,
 }
 
-const test_2 = () => {
+export const obj01 = {
+    obj01_01 : function(p:string) {
+        for(;;)
+            console.log('obj01_01'+p);
+    },
+    obj01_02 : async function(p:string) {
+        for(;;)
+            console.log('obj01_02'+p);
+    },
+    obj01_03 : function*(p:string) {
+        for(;;)
+            console.log('obj01_03'+p);
+    },
+    obj01_04 : async function*(p:string) {
+        for(;;)
+            console.log('obj01_04'+p);
+    },
+    // obj01_05 : (p:string) =>{
+    //     for(;;)
+    //         console.log('obj01_04'+p);
+    // },
+};
 
-    console.log('test2');
+export const obj02 = {
+    obj02_01 : function(p:string) {
+        for(;;)
+            console.log('obj02_01'+p);
+    },
+    obj02_02 : async function(p:string) {
+        for(;;)
+            console.log('obj02_02'+p);
+    },
+    obj02_03 : function*(p:string) {
+        for(;;)
+            console.log('obj02_03'+p);
+    },
+    obj02_04 : async function*(p:string) {
+        for(;;)
+            console.log('obj02_04'+p);
+    },
+    obj01_05 : (p:string) =>{
+        for(;;)
+            console.log('obj01_04'+p);
+    },
 }
-
-export {test_2}

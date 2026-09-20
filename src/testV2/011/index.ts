@@ -1,28 +1,55 @@
 import { Sprite } from './lib/sprite';
-import { threadObj, test, Tester, test_2 } from './sub/threads';
-
-const tester = new Tester();
-
-const obj = {
-    thread: threadObj.thread4,
-    threadTest: test,
-    theradMethod: tester.thread,
-    threadStatic: Tester.threadS,
-    test: test_2,
-    testUndefined: undefined,
-} as const;
-console.log(obj);
-
-//const test2 = test;//obj.threadTest;
+import * as Thread from './sub/threads';
 
 const sprite = new Sprite();
 
-// const b = obj.test;
+sprite.Thread.func = Thread.CustomSpriteObj01.thread01_01;
 
-// const a = b
+sprite.Thread.func = Thread.CustomSpriteObj01.thread01_02;
 
-// sprite.Thread.func = a
+sprite.Thread.func = Thread.CustomSpriteObj01.thread01_03;
 
-sprite.Thread.func = function() {
-    // test
+sprite.Thread.func = Thread.CustomSpriteObj01.thread01_04;
+
+sprite.Thread.func = Thread.CustomSpriteObj02.thread02_01;
+
+sprite.Thread.func = Thread.CustomSpriteObj02.thread02_02;
+
+sprite.Thread.func = Thread.CustomSpriteObj02.thread02_03;
+
+sprite.Thread.func = Thread.CustomSpriteObj02.thread02_04;
+
+sprite.Thread.func = Thread.obj01.obj01_01;
+
+sprite.Thread.func = Thread.obj01.obj01_02;
+
+sprite.Thread.func = Thread.obj01.obj01_03;
+
+sprite.Thread.func = Thread.obj01.obj01_04;
+
+//sprite.Thread.func = Thread.obj01.obj01_05;
+
+sprite.Thread.func = function(this:Sprite) {
+    for(;;)
+        //console.log("001 - direct function()")
+        this.Control.wait(1);
 }
+
+const func001 = function(this:Sprite) {
+    for(;;)
+        //console.log("002 - direct function()")
+        this.Control.wait(1);
+}
+
+sprite.Thread.func = func001;
+
+const obj02_01 = Thread.obj02.obj02_01
+const obj02_02 = Thread.obj02.obj02_02
+const obj02_03 = Thread.obj02.obj02_03
+const obj02_04 = Thread.obj02.obj02_04
+
+sprite.Thread.func = obj02_01;
+sprite.Thread.func = obj02_02;
+sprite.Thread.func = obj02_03;
+sprite.Thread.func = obj02_04;
+

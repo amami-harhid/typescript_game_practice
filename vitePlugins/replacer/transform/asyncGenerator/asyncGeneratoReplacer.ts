@@ -94,8 +94,10 @@ export const methodToAsyncGenerator = function(method: MethodDeclaration){
  * @param targetFile
  */
 export const methodToAsyncGeneratorAnotherFile = function(method: MethodDeclaration, targetFile: SourceFile){
+    //console.log('=== 別ファイルの置換 methodToAsyncGeneratorAnotherFile')
     const body = method.getBody();
     if(body){
+        //console.log('Body あり')
         const bodyText = body.getText();
         const params = method.getParameters();
         const paramsText = params.map(p => p.getText()).join(', ');
@@ -105,7 +107,7 @@ export const methodToAsyncGeneratorAnotherFile = function(method: MethodDeclarat
         const replacedId = targetFile.getFilePath()
         const replacedCode = targetFile.getText();
         Cache.MemoryCache.set(replacedId, replacedCode);
-        targetFile.forget(); // 読み込み直し
+        //targetFile.forget(); // 読み込み直し
     }
 }
 
@@ -128,7 +130,7 @@ export const funcToAsyncGeneratorAnotherFile = function(func: FunctionExpression
         const replacedId = targetFile.getFilePath();
         const replacedCode = targetFile.getText();
         Cache.MemoryCache.set(replacedId, replacedCode);
-        targetFile.forget(); // 読み込み直し
+        //targetFile.forget(); // 読み込み直し
     }
 }
 /**

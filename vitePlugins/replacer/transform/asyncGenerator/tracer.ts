@@ -23,7 +23,10 @@ export const tracer = (node : Node<ts.Node>) => {
             }
             trace = continuedCondition(traceNode);
         }
-        return traceNode;
+        if(traceNode){
+            //console.log("[tracer 001] ", traceNode.getText(), traceNode.getKindName());
+            return traceNode;
+        }
     }
     return undefined;
 }
@@ -60,6 +63,7 @@ const getDefinition = (node: Node<ts.Node>) => {
                     }
                 }
             }
+            console.log("想定外ルート[001] ", node.getText(), node.getKindName());
         }
     }
     if (node.getKind() === SyntaxKind.Identifier) {
@@ -100,6 +104,6 @@ const getDefinition = (node: Node<ts.Node>) => {
             }
         }
     }
-    console.log("想定外ルート、", node.getText(), node.getKindName());
+    console.log("想定外ルート[002] ", node.getText(), node.getKindName());
 
 }

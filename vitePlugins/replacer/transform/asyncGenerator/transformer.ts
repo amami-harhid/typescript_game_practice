@@ -108,7 +108,7 @@ export function transform(code: string, id: string, emitError: EmitErrorWrapper 
     };
 
     // magic-string を使って、安全に一括置換を行う
-    //console.log('replacements=', replacements)
+    //console.log('REPLACER.replacements=', REPLACER.replacements)
     for (const r of REPLACER.replacements) {
         magicString.overwrite(r.start, r.end, r.text);
     }
