@@ -128,6 +128,7 @@ export const emitError: EmitErrorWrapper = (errObj: ErrorObj) => {
 			throw e;
     	}
     	// Viteのクライアントへ直接エラーイベントを発火（Viteがパスを上書きするのを防ぐ）
+        setTimeout(()=>{
     	server.ws.send({
     		type: 'error',
         	err: {
@@ -141,7 +142,11 @@ export const emitError: EmitErrorWrapper = (errObj: ErrorObj) => {
             	frame: generateCodeFrame(fileContent, errObj.loc.line, errObj.loc.column)
         	}
 	    } as any);
-        console.log(errObj.message)
+            
+        },200)
+        //console.log(errObj.message)
+    }else{
+        console.log('Server がない');
     }
 };
 /**

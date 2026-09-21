@@ -3,6 +3,7 @@ import { ArrowFunction, Expression, Node, SourceFile, SyntaxKind } from "ts-morp
 import * as Helper from '../../helper.ts';
 import * as Replacer from './asyncGeneratoReplacer.ts';
 import { tracer } from './tracer.ts';
+import * as AsyncGeneratorHelper from './asyncGeneratorHelper.ts';
 
 /**
  * スレッドセッターへ格納する「何か」の定義元を探索し、探索し終わったときの後始末
@@ -54,7 +55,7 @@ const finalNodeAction = (id: string, finalNode: Node<ts.Node>, sourceFile: Sourc
             Replacer.arrowFuncErrorActionAnotherFile(arrow);
             return {hasChanged: false, forceError: true};
         }else{
-            console.log('同一ファイル ');
+            console.log('他のファイル ');
             console.log(sourceFile.getFilePath());
             console.log(finalNode.getKindName());
             console.log(finalNode.getText());
@@ -85,6 +86,25 @@ const outSideError = (expression : Expression<ts.Expression>)  :Helper.ErrorObj 
     };
     return errObj;
 }
+const propertySignatureError = (node: Node<ts.Node>) :Helper.ErrorObj => {
+    // 行番号
+    const lineNo = node.getStartLineNumber();
+    // 列番号 = ノード全体の開始位置 - 行の開始位置 + 1 
+    const columnNo = node.getStart() - node.getStartLinePos() + 1;
+    // 先にTS-Morphメモリを解放する(エラー表示後のホットリロード時に全コードの整合性を保つ)ために【A】を行う
+    // 【A】ts-morph のメモリ解放
+    const sourceFile = node.getSourceFile();
+    //sourceFile.forget();
+    const id = sourceFile.getFilePath();
+    const errObj : Helper.ErrorObj = {
+        message: '定義元が一意に定まらないのでコードを見直してください[002]',
+        id: id,
+        loc: { line: lineNo, column: columnNo }, // オプション: エラー箇所の行・列
+        customSend: true,
+    };
+    return errObj;
+
+}
 /**
  * 左側の置換処理
  * @param {string} id 対象ファイルのパス
@@ -104,12 +124,18 @@ export const replacer = (id:string, rightExpression: Expression<ts.Expression>, 
             Helper.emitError(errObj);
         }
         if(finalNode){
-            hasChanged = true;
-            const rtn = finalNodeAction(id, finalNode, sourceFile);
-            hasChanged = rtn.hasChanged;
+            if(finalNode.getKind()===SyntaxKind.PropertySignature){
+                Helper.forceErrorObj.forceError = true;
+                hasChanged = false;
+                const errObj = propertySignatureError(rightExpression);
+                Helper.emitError(errObj);
+            }else{
+                const rtn = finalNodeAction(id, finalNode, sourceFile);
+                hasChanged = rtn.hasChanged;
+            }
         }
 
-    }
+    }else
     // 右側が「識別子（名前）」(Identifier)のとき
     if (rightExpression.getKind() === SyntaxKind.Identifier) {
         const rightIdentifier = rightExpression.asKindOrThrow(SyntaxKind.Identifier);
