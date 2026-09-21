@@ -58,6 +58,23 @@ export const tracer = (node : Node<ts.Node>) => {
 const getDefinition = (node: Node<ts.Node>, startNode: Node<ts.Node>) => {
     if (node.getKind() === SyntaxKind.PropertyAccessExpression){
         const propertyAccessExpression = node.asKindOrThrow(SyntaxKind.PropertyAccessExpression);
+
+        const nameNode = propertyAccessExpression.getNameNode()
+        const definitions = nameNode.getDefinitionNodes();
+        for(const def of definitions){
+            console.log('def[001]=', def.getKindName(), def.getText());
+            if(def.getKind() === SyntaxKind.PropertySignature) {
+                const propertySignature = def.asKindOrThrow(SyntaxKind.PropertySignature);
+                console.log('propertySignature=', propertySignature.getKindName(), propertySignature.getText())
+                const initializer = propertySignature.getInitializer();
+                if(initializer){
+                    console.log('initializer=', initializer.getKindName(), initializer.getText())
+
+                }
+            }
+
+        }
+
         const symbol = propertyAccessExpression.getNameNode().getSymbol();
         if(symbol){
             const declarations = symbol.getDeclarations();
