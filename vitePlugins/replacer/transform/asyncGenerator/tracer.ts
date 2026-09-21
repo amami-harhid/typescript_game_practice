@@ -41,6 +41,8 @@ export const tracer = (node : Node<ts.Node>) => {
                 // Viteルート配下にあるときは 探索したノードを返す
                 //console.log("[tracer 001] ", traceNode.getText(), traceNode.getKindName());
                 return traceNode;
+            // }else{
+            //     console.log(node.getText())
             }
         }
     }
@@ -107,6 +109,7 @@ const getDefinition = (node: Node<ts.Node>, startNode: Node<ts.Node>) => {
             // 異なる場所にある複数のオブジェクトリテラルが、型推論によって1つの共通のプロパティシンボルに
             // 集約されることがある。
             const propertyDecls = declarations.filter(d => d.getKind() === SyntaxKind.PropertyAssignment);
+            console.log('propertyDecls.length=', propertyDecls.length, node.getText())
             if(propertyDecls.length == 1){
                 const propertyDecl = propertyDecls[0];
                 if(propertyDecl && propertyDecl.getKind()==SyntaxKind.PropertyAssignment) {
@@ -150,8 +153,18 @@ const getDefinition = (node: Node<ts.Node>, startNode: Node<ts.Node>) => {
 
                 Helper.forceErrorObj.forceError = true;
             }else{
-                //const propertyDecl = declarations.find(d => d.getKind() === SyntaxKind.PropertyAssignment);
+                // symbolで定義元を探索できなかったとき
                 console.log("想定外ルート[001] ", node.getText(), node.getKindName());
+                const nameNode = propertyAccessExpression.getNameNode()
+                const definitions = nameNode.getDefinitionNodes();
+                const functionDecls = definitions.filter(
+                    d => d.getKind() === SyntaxKind.FunctionExpression || d.getKind() === SyntaxKind.ArrowFunction
+                );
+                for(const def of definitions) {
+                    console.log('def = ', def.getText(), def.getKindName())
+                }
+                console.log("functionDecls length=", functionDecls.length);
+                //const propertyDecl = declarations.find(d => d.getKind() === SyntaxKind.PropertyAssignment);
 
             }
         }

@@ -64,3 +64,17 @@ const customSprite01 = new Custom.CustomSprite01();
 
 customSprite01.Thread.func = customSprite01.thread001;
 customSprite01.Thread.func = customSprite01.thread002;
+
+type TestObj = {id?:string, func: CallableFunction};
+const testObje:TestObj[] = [
+
+    {func: function(this:Sprite) {
+        console.log('#00001 ')
+    }},
+    {id:"bbb",func: function(this:Sprite) {
+        console.log('#00002')
+
+    }},
+]
+
+customSprite01.Thread.func = testObje[0].func;

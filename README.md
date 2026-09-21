@@ -216,3 +216,36 @@ filter() で対象の全てを取得し、配列処理をしないといけな�
 ```typescript
 const propertyDecl = declarations.find(d => d.getKind() === SyntaxKind.PropertyAssignment);
 ```
+
+```typescript
+type TestObj = {id?:string, func: CallableFunction};
+const testObje: TestObj = [
+
+    {func: function(this:Sprite) {
+        console.log('#00001 ')
+    }},
+    // {id:"bbb",func: function(this:Sprite) {
+    //     console.log('#00002')
+
+    // }},
+]
+
+customSprite01.Thread.func = testObje[0].func; // <== これの定義もとをたどると「PropertyAccessExpression」
+
+```
+```typescript
+//type TestObj = {id?:string, func: CallableFunction};
+const testObje = [
+
+    {func: function(this:Sprite) { //<===『Ａ』
+        console.log('#00001 ')
+    }},
+    // {id:"bbb",func: function(this:Sprite) {
+    //     console.log('#00002')
+
+    // }},
+]
+
+customSprite01.Thread.func = testObje[0].func; // <== これの定義もとをたどると『Ａ』を取得できる
+
+```
