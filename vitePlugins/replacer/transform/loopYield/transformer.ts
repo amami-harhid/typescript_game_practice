@@ -253,9 +253,6 @@ export const transform = (
                         customSend : true,
                     }
                     Helper.emitError(errObj);
-                    //console.log('==== after emitError[001] ====', id);
-                    //Helper.forceErrorObj.forceError = true;
-                    //throw new Helper.YieldError('Generator関数でない中でyieldを付与できません[002]', errorTargetNode)
                 }
                 if(parent){
                     // 親関数が generator/asyncGeneratorでないときはエラーとする
@@ -268,9 +265,6 @@ export const transform = (
                             customSend : true,
                         }
                         Helper.emitError(errObj);
-                        //console.log('==== after emitError[002] ====', id, parent.getText());
-                        //Helper.forceErrorObj.forceError = true;
-                        //throw new Helper.YieldError('Generator関数でない中でyieldを付与できません[002]', parent)
                     }
                 }
                 if(Helper.forceErrorObj.forceError){

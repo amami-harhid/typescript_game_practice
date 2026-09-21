@@ -1,11 +1,12 @@
 import * as ts from 'typescript';
-import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite';
+import type { Plugin, ResolvedConfig } from 'vite';
 import * as path from 'path';
 import remapping from '@ampproject/remapping';
 
 import * as Cache from './memoryCache.ts';
 import * as Helper from './helper.ts';
-import * as AsyncGenerator from './transform/asyncGenerator/transformer.ts'
+import * as AsyncGenerator from './transform/asyncGenerator/transformer.ts';
+import * as AsyncGeneratorHelper from './transform/asyncGenerator/asyncGeneratorHelper.ts';
 import * as Await from './transform/await/transformer.ts';
 import * as LoopYield from './transform/loopYield/transformer.ts';
 
@@ -50,10 +51,11 @@ export function vitePluginAutoReplacer(
 			}
 			return null;
 		},
-		// 開発サーバーのインスタンスを保持する
+		/** 開発サーバー */ 
     	configureServer(_server) {
 			Helper.ServerObj.server = _server;
     	},
+		/** ホットリロード時のフック */
 		hotUpdate(ctx) {
 			Helper.forceErrorObj.forceError = false;
 			// Vite 8では、ブラウザ用のコードを処理する client 環境 と、サーバーサイド（SSRやVite自体の処理）用の
@@ -73,10 +75,13 @@ export function vitePluginAutoReplacer(
 			const fileName = ctx.file;
 			
 			if(fileName.endsWith(".ts")){
-				//console.log('hotUpdate ==> full-reload')
+				
+				// キャッシュを全クリアする
 				Cache.MemoryCache.clear();
-				const { moduleGraph } = this.environment;
+				AsyncGeneratorHelper.ReplacementCache.clear();
+
 				// 更新保存されたモジュール情報を取得
+				const { moduleGraph } = this.environment;
 				const threadMods = moduleGraph.getModulesByFile(ctx.file);
 				if (threadMods) {
 					const invalidated = new Set<any>();
@@ -102,11 +107,11 @@ export function vitePluginAutoReplacer(
 				return [];
 			}
 		},
-		// Viteの設定が確定したタイミングで呼び出されるフック
+		/** Viteの設定が確定したタイミングで呼び出されるフック*/ 
 		configResolved(config: ResolvedConfig) {
 			Helper.ViteConfigObj.viteConfig = config;
 		},
-    	// プロジェクト起動時に tsconfig.json を読み込んで、型環境を完全に構築する
+    	/** プロジェクト起動時に tsconfig.json を読み込んで、型環境を完全に構築する*/
     	buildStart() {
 
       		const configPath = ts.findConfigFile(process.cwd(), ts.sys.fileExists, 'tsconfig.json');
@@ -164,34 +169,18 @@ export function vitePluginAutoReplacer(
 			// ステップ３
 			// 繰り返しループの中に yieldをつける ( + 必要に応じて親メソッドを Generator関数にする )
 			// Typescriptの公式変換( 型情報は消えて、Javascript になる )
-			let loopYieldTranspileResult: ts.TranspileOutput|undefined;
-			try{
-				loopYieldTranspileResult = ts.transpileModule(awaitTransformResult.code, {
-					compilerOptions: compilerOptions,
-					fileName: _id,
-					transformers: {
-						// 【before】
-						// TypeScript 本来の構文変換の前に
-						// 自作の変換処理（トランスフォーマー）を実行させる
-    	            	before: [
-        	                (context) => LoopYield.transform(id, context)
-            	        ]
-                	}
-				});
-			}catch(error){
-				if(error instanceof Helper.YieldError){
-					//console.log(error);
-					const target = error.node;
-					const info = Helper.getTsNodeLocation(target);
-					const errObj: Helper.ErrorObj = {
-							message: 'Generator関数でない中でyieldを付与できません[002]',
-							id: id,
-							loc: { line: info.line, column: info.column }, // オプション: エラー箇所の行・列
-							customSend : true,
-						}
-						Helper.emitError(errObj);
-				}
-			}
+			const loopYieldTranspileResult = ts.transpileModule(awaitTransformResult.code, {
+				compilerOptions: compilerOptions,
+				fileName: _id,
+				transformers: {
+					// 【before】
+					// TypeScript 本来の構文変換の前に
+					// 自作の変換処理（トランスフォーマー）を実行させる
+    	        	before: [
+                        (context) => LoopYield.transform(id, context)
+        	        ]
+            	}
+			});
 			if(Helper.forceErrorObj.forceError) {
 				return { code: code, map: null};			
 			}

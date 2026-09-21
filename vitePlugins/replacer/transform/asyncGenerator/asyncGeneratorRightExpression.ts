@@ -97,80 +97,30 @@ export const replacer = (id:string, rightExpression: Expression<ts.Expression>, 
     // 右側が『PropertyAccessExpression』のとき
     // クラスインスタンスメソッドまたはリテラルオブジェクトのメソッドの場合が想定される
     if (rightExpression.getKind() === SyntaxKind.PropertyAccessExpression){
-        try{
-            const finalNode = tracer(rightExpression);
-            if(finalNode == undefined){
-                //console.log('finalNode is undefined [001]');
-                const errObj = outSideError(rightExpression);
-                Helper.emitError(errObj);
-            }
-            if(finalNode){
-                hasChanged = true;
-                const rtn = finalNodeAction(id, finalNode, sourceFile);
-                hasChanged = rtn.hasChanged;
-            }
-        }catch(error){
-            console.log(error);
-            if(error instanceof Helper.AsyncGeneratorError){
-                const sourceFile = rightExpression.getSourceFile();
-                const id = sourceFile.getFilePath();
-                // 行番号
-                const lineNo = rightExpression.getStartLineNumber();
-                // 列番号 = ノード全体の開始位置 - 行の開始位置 + 1 
-                const columnNo = rightExpression.getStart() - rightExpression.getStartLinePos() + 1;
-                // エラー
-                const errObj: Helper.ErrorObj = {
-                    message: "セッター定義が一意に定まるようにコードを見直してください",
-                    id: id,
-                    loc: {
-                        line: lineNo,
-                        column: columnNo
-                    }, 
-                    customSend: true,
-                }
-                Helper.emitError(errObj);
-                Helper.forceErrorObj.forceError = true;
-            }else{
-                throw error;
-            }
+        const finalNode = tracer(rightExpression);
+        if(finalNode == undefined){
+            //console.log('finalNode is undefined [001]');
+            const errObj = outSideError(rightExpression);
+            Helper.emitError(errObj);
         }
+        if(finalNode){
+            hasChanged = true;
+            const rtn = finalNodeAction(id, finalNode, sourceFile);
+            hasChanged = rtn.hasChanged;
+        }
+
     }
     // 右側が「識別子（名前）」(Identifier)のとき
     if (rightExpression.getKind() === SyntaxKind.Identifier) {
         const rightIdentifier = rightExpression.asKindOrThrow(SyntaxKind.Identifier);
-        try{
-            const finalNode = tracer(rightIdentifier);
-            if(finalNode == undefined){
-                const errObj = outSideError(rightExpression);
-                Helper.emitError(errObj);
-            }
-            if(finalNode){
-                const rtn = finalNodeAction(id, finalNode, sourceFile);
-                hasChanged = rtn.hasChanged;
-            }
-        }catch(error){
-            console.log(error);
-            if(error instanceof Helper.AsyncGeneratorError){
-                const sourceFile = rightExpression.getSourceFile();
-                const id = sourceFile.getFilePath();
-                // 行番号
-                const lineNo = rightExpression.getStartLineNumber();
-                // 列番号 = ノード全体の開始位置 - 行の開始位置 + 1 
-                const columnNo = rightExpression.getStart() - rightExpression.getStartLinePos() + 1;
-                // エラー
-                const errObj: Helper.ErrorObj = {
-                    message: "セッター定義が一意に定まるようにコードを見直してください",
-                    id: id,
-                    loc: {
-                        line: lineNo,
-                        column: columnNo
-                    }, 
-                    customSend: true,
-                }
-                Helper.emitError(errObj);
-            }else{
-                throw error;
-            }
+        const finalNode = tracer(rightIdentifier);
+        if(finalNode == undefined){
+            const errObj = outSideError(rightExpression);
+            Helper.emitError(errObj);
+        }
+        if(finalNode){
+            const rtn = finalNodeAction(id, finalNode, sourceFile);
+            hasChanged = rtn.hasChanged;
         }
     }else {
         // セッターに変数を代入していない場合の処理

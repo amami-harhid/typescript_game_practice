@@ -8,25 +8,11 @@ import { ViteDevServer, ResolvedConfig, normalizePath } from 'vite';
 import { SourceFile } from 'ts-morph';
 import fs from 'fs'; 
 
-
-
 type ForceErrorObj = {forceError: boolean};
 export const forceErrorObj: ForceErrorObj = {
     forceError: false
 };
 
-export const AsyncGeneratorError = class extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'AsyncGeneratorError';
-    }
-} 
-export const AwaitError = class extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'AwaitError';
-    }
-}
 export const YieldError = class extends Error {
     private _node: ts.Node;
     constructor(message: string, node: ts.Node) {

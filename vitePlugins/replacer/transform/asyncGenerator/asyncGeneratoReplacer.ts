@@ -1,8 +1,6 @@
 import * as ts from 'typescript';
 import { Expression, SyntaxKind, SourceFile, MethodDeclaration, FunctionExpression, ArrowFunction } from 'ts-morph';
-import * as Cache from '../../memoryCache.ts';
 import * as Helper from '../../helper.ts';
-import MagicString from 'magic-string';
 import * as AsyncGeneratorHelp from './asyncGeneratorHelper.ts'
 
 /**

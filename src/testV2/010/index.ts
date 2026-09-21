@@ -23,7 +23,7 @@ sprite.Thread.func = threadObj.thread4;
 sprite.position.x = window.innerWidth/2;
 sprite.position.y = window.innerHeight/2;
 
-sprite.Control.wait(1);
+sprite.Control.wait(0.1);
 
 
 let muki = -1;
@@ -57,7 +57,7 @@ sprite.Thread.func = test3;
 
 sprite.Thread.func = function (this:CustomSprite){
     this.degree = 15;
-    this.Control.wait(3);
+    this.Control.wait(0.2);
     // ずっと繰り返す
     for(;;){
         this.degree += speed * muki;

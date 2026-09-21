@@ -125,6 +125,10 @@ export function transform(code: string, id: string ): { code: string; map: any, 
         }
     };
     
+    // 定義元が他ファイルにあるときに他ファイルの置換を要する場合がある
+    // 他ファイル置換を要する場合はCacheにためておき、ここで
+    // 一括して置換し map を作り出し、「MemoryCache」に保管する
+    // 「MemoryCache」にためたコードとMapは、メイン処理のロードメソッドで取り出される。
     for(const fileName of AsyncGeneratorHelp.ReplacementCache.keys()){
         const elements = AsyncGeneratorHelp.ReplacementCache.get(fileName);
         if(elements){
