@@ -7,7 +7,7 @@ export class EntityControl {
 
     /**
      * あいうえお
-     * @param seconds
+     * @param {number} seconds
      * @needsAwait 
      */
     async wait( seconds: number ): Promise<void> {

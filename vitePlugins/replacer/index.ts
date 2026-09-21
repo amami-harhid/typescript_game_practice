@@ -37,6 +37,7 @@ export function vitePluginAutoReplacer(
 	}
 
 	let compilerOptions: ts.CompilerOptions = {};
+	Helper.forceErrorObj.forceError = false;
 
 	return {
 		name: 'vite-plugin-auto-replacing',
@@ -54,6 +55,7 @@ export function vitePluginAutoReplacer(
 			Helper.ServerObj.server = _server;
     	},
 		hotUpdate(ctx) {
+			Helper.forceErrorObj.forceError = false;
 			// Vite 8では、ブラウザ用のコードを処理する client 環境 と、サーバーサイド（SSRやVite自体の処理）用の
 			// コードを処理する ssr 環境 など、複数の環境が並行して動いている。
 			// そのため、1回の保存に対して「client 環境用」と「ssr 環境用」の2回、フックがトリガーされる
@@ -132,6 +134,11 @@ export function vitePluginAutoReplacer(
 
 		},
 	    transform(code, id) {
+
+			if(Helper.forceErrorObj.forceError){
+				return { code: code, map: null};
+			}
+
 			const [_id] = id.split('?');
 			
     		// node_modules やに対象外のファイルはスルー
@@ -143,37 +150,60 @@ export function vitePluginAutoReplacer(
 			// async generator化
 			const asyncGeneratorTransformResult = AsyncGenerator.transform(code,_id);
 			
-			if(asyncGeneratorTransformResult.forceError === true) {
-				return { code: '', map: null};
+			if(Helper.forceErrorObj.forceError) {
+				return { code: code, map: null};
 			}
 			// ステップ２
 			// await 追加( + 必要に応じて親メソッド定義を async にする)
 			// (magicStringを使う)
 			const awaitTransformResult = Await.transform(asyncGeneratorTransformResult.code, _id);
 			
+			if(Helper.forceErrorObj.forceError) {
+				return { code: code, map: null};	
+			}
 			// ステップ３
 			// 繰り返しループの中に yieldをつける ( + 必要に応じて親メソッドを Generator関数にする )
 			// Typescriptの公式変換( 型情報は消えて、Javascript になる )
-			const loopYieldTranspileResult = ts.transpileModule(awaitTransformResult.code, {
-				compilerOptions: compilerOptions,
-				fileName: _id,
-				transformers: {
-					// 【before】
-					// TypeScript 本来の構文変換の前に
-					// 自作の変換処理（トランスフォーマー）を実行させる
-                	before: [
-                        (context) => LoopYield.transform(id, context)
-                    ]
-                }
-			});
-
+			let loopYieldTranspileResult: ts.TranspileOutput|undefined;
+			try{
+				loopYieldTranspileResult = ts.transpileModule(awaitTransformResult.code, {
+					compilerOptions: compilerOptions,
+					fileName: _id,
+					transformers: {
+						// 【before】
+						// TypeScript 本来の構文変換の前に
+						// 自作の変換処理（トランスフォーマー）を実行させる
+    	            	before: [
+        	                (context) => LoopYield.transform(id, context)
+            	        ]
+                	}
+				});
+			}catch(error){
+				if(error instanceof Helper.YieldError){
+					//console.log(error);
+					const target = error.node;
+					const info = Helper.getTsNodeLocation(target);
+					const errObj: Helper.ErrorObj = {
+							message: 'Generator関数でない中でyieldを付与できません[002]',
+							id: id,
+							loc: { line: info.line, column: info.column }, // オプション: エラー箇所の行・列
+							customSend : true,
+						}
+						Helper.emitError(errObj);
+				}
+			}
+			if(Helper.forceErrorObj.forceError) {
+				return { code: code, map: null};			
+			}
+			if(loopYieldTranspileResult == undefined) 
+				return null;
 			// 元ファイルへ空行を追加したとき無視されないように、現在時刻を末尾行に追加する
 			const timestamp = Date.now();
 			const finalCode = loopYieldTranspileResult.outputText + `\n// _hmr_refresh_anchor_: ${timestamp}`;
 
 			const map1 = asyncGeneratorTransformResult.map;
 			const map2 = awaitTransformResult.map;
-
+			
 			// TypeScriptが生成したマップをオブジェクトに変換
 			const map3Text = loopYieldTranspileResult.sourceMapText;
 			const map3 = (map3Text)? JSON.parse(map3Text): {};

@@ -2,6 +2,7 @@ import * as Lib from './lib/';
 import type { ISprite as Sprite } from './lib/sprite';
 import * as Thread from './sub/threads';
 import { outSideFunc } from '../../../lib/test';
+import * as Custom from './sub/customSprite';
 
 const sprite = new Lib.Sprite();
 
@@ -19,7 +20,7 @@ sprite.Thread.func = Thread.CustomSpriteObj02.thread02_02;
 
 sprite.Thread.func = Thread.CustomSpriteObj02.thread02_03;
 
-sprite.Thread.func = Thread.CustomSpriteObj02.thread02_04;
+//sprite.Thread.func = Thread.CustomSpriteObj02.thread02_04;
 
 sprite.Thread.func = Thread.obj01.obj01_01;
 
@@ -55,6 +56,11 @@ sprite.Thread.func = obj02_02;
 sprite.Thread.func = obj02_03;
 sprite.Thread.func = obj02_04;
 
-sprite.Thread.func = outSideFunc; //Thread.outSideFunction;
+//sprite.Thread.func = outSideFunc; //範囲外エラー
 // aaa
 outSideFunc();
+
+const customSprite01 = new Custom.CustomSprite01();
+
+customSprite01.Thread.func = customSprite01.thread001;
+customSprite01.Thread.func = customSprite01.thread002;

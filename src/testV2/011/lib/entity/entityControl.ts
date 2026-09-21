@@ -1,6 +1,9 @@
 import { controlWait } from "../../../../lib/controls";
 
 export interface IEntityControl {
+    /**
+     * @needsAwait 
+     */
     wait(second: number): Promise<void>;
 }
 

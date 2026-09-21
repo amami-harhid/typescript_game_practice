@@ -1,7 +1,7 @@
-import { EntityControl } from "./entityControl";
+import { EntityControl, IEntityControl } from "./entityControl";
 
 export class Entity {
-    private _control: EntityControl;
+    private _control: IEntityControl;
 
     constructor() {
         this._control = new EntityControl();

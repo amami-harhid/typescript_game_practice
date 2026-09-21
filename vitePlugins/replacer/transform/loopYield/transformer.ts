@@ -217,8 +217,10 @@ export const transform = (
     context: ts.TransformationContext,
 ) => {
     return (rootNode: ts.SourceFile) => {
-
         function visit(node: ts.Node, inLoop = false): ts.Node {
+            if(Helper.forceErrorObj.forceError){
+                return node;
+            }
             // 繰り返し構文の検知と書き換え
             if (
                 ts.isForStatement(node) ||
@@ -251,6 +253,9 @@ export const transform = (
                         customSend : true,
                     }
                     Helper.emitError(errObj);
+                    //console.log('==== after emitError[001] ====', id);
+                    //Helper.forceErrorObj.forceError = true;
+                    //throw new Helper.YieldError('Generator関数でない中でyieldを付与できません[002]', errorTargetNode)
                 }
                 if(parent){
                     // 親関数が generator/asyncGeneratorでないときはエラーとする
@@ -263,10 +268,14 @@ export const transform = (
                             customSend : true,
                         }
                         Helper.emitError(errObj);
-                        //console.log('==== after emitError ====')
+                        //console.log('==== after emitError[002] ====', id, parent.getText());
+                        //Helper.forceErrorObj.forceError = true;
+                        //throw new Helper.YieldError('Generator関数でない中でyieldを付与できません[002]', parent)
                     }
                 }
-
+                if(Helper.forceErrorObj.forceError){
+                    return node;
+                }
                 const [change, loopNewStatement] = loopChange(id, node, visit);
                 if(change) {
                     return loopNewStatement;

@@ -28,8 +28,15 @@ function getOrInitProject(): Project {
 export function transform(
     code: string, 
     id: string
-): { code: string; map: any } {
+): { code: string; map: any, forceEnd: boolean } {
 
+    if(Helper.forceErrorObj.forceError) {
+        return {
+            code: code,
+            map: null,
+            forceEnd: true,
+        }
+    }
     // プロジェクトの再作成をすることで キャッシュの衝突回避対応は不要です
     // キャッシュの衝突を防ぐため、元の id の末尾にダミーの接尾辞をつける
     // 例: "src/main.ts" -> "src/main.stage2.ts"
@@ -86,16 +93,23 @@ export function transform(
             }
             // 登録されているときは この callExprのJSDocのチェックをする
             if( awaitMatch === true ) {
+                //const children = expression.getChildren();
+                //const lastChild = children[children.length-1];
+                //console.log(lastChild.getText())
                 const objectExpression = propAccess.getExpression(); // 型 LeftHandSideExpression<ts.LeftHandSideExpression>
                 // JSDOC を取り込む
                 const _objectType = typeChecker.getTypeAtLocation(objectExpression);
-                _objectType.getProperties().some((prop: Symbol)=> {
+                //console.log(_objectType)
+                for(const prop of _objectType.getProperties()){
                     const tags = prop.getJsDocTags();
                     if(tags){
                         // JSDOCにタグ(@needsAwait)があれば
                         // await付与をする
-                        tags.forEach((tag: JSDocTagInfo)=>{
+                        //tags.forEach((tag: JSDocTagInfo)=>{
+                        for( const tag of tags) {
                             const tagName = tag.getName(); // this.Control.wait(10) ==> wait のJSDOCにある タグ @～
+                            //const children = expression.getChildren();
+                            //console.log('tagName=', tagName, expression.getText(), children[children.length-1].getText())
                             const NeedsAwait = Helper.jsonDataObj.tagMarks.NEEDS_AWAIT_METHOD_TAG.replace(/^@/, ''); // 先頭の@を消す
                             if( tagName == NeedsAwait) {
                                 // 直親の関数定義がAsync でないとき
@@ -106,15 +120,16 @@ export function transform(
                                     const columnNo = callExpr.getStart() - callExpr.getStartLinePos() + 1;
                                     // 先にTS-Morphメモリを解放する(エラー表示後のホットリロード時に全コードの整合性を保つ)ために【A】【B】を行う
                                     // 【A】ts-morph のメモリ解放
-                                    sourceFile.forget(); 
+                                    //sourceFile.forget(); 
                                     // 【B】エラーメッセージを表示する
                                     const errObj : ErrorObj = {
-                                        message: 'このメソッドを呼び出すには上位関数を『async』にする必要があります',
+                                        message: 'このメソッドを呼び出すには上位関数を『async』にする必要があります[001]',
                                         id: id,
                                         loc: { line: lineNo, column: columnNo }, // オプション: エラー箇所の行・列
                                         customSend: true,
                                     };
                                     Helper.emitError(errObj);
+                                    return {code: code, map: null, forceEnd: true};
                                 }else{
                                     const start = callExpr.getStart();
                                     // 左側に("await ")を追加する
@@ -122,15 +137,15 @@ export function transform(
                                     return true;
                                 }
                             }
-                            return false;
-                        });
+                            //return false;
+                        };
                         // forEach内で return true or falseしているが
                         // 処理場の意味は特にない。
                         // 処理した or していない をコード上で人間に分かりやすく
                         // したいからの意味だけである。
                         return false;
                     }
-                });
+                };
             }
         }
     });
@@ -149,7 +164,8 @@ export function transform(
                 hires: true,
                 source: baseId, // <=== 【★Ａ】
                 includeContent: true,
-            })
+            }),
+        forceEnd: false
     };
 }
 

@@ -2,6 +2,8 @@ import * as ts from 'typescript';
 import { Expression, SyntaxKind, SourceFile, MethodDeclaration, FunctionExpression, ArrowFunction } from 'ts-morph';
 import * as Cache from '../../memoryCache.ts';
 import * as Helper from '../../helper.ts';
+import MagicString from 'magic-string';
+import * as AsyncGeneratorHelp from './asyncGeneratorHelper.ts'
 
 /**
  * 置換位置を記録するための配列
@@ -94,19 +96,18 @@ export const methodToAsyncGenerator = function(method: MethodDeclaration){
  * @param targetFile
  */
 export const methodToAsyncGeneratorAnotherFile = function(method: MethodDeclaration, targetFile: SourceFile){
-    const body = method.getBody();
-    if(body){
-        const bodyText = body.getText();
-        const params = method.getParameters();
-        const paramsText = params.map(p => p.getText()).join(', ');
-        const methodName = method.getName();
-        const _methodName = (methodName)? methodName: '';
-        method.replaceWithText(`async *${_methodName} (${paramsText}) ${bodyText}`);
-        const replacedId = targetFile.getFilePath()
-        const replacedCode = targetFile.getText();
-        Cache.MemoryCache.set(replacedId, replacedCode);
-        //targetFile.forget(); // 読み込み直し
-    }
+    const replacedId = targetFile.getFilePath();
+    const start = method.getStart();
+    // 最初の"("までの文字数
+    const code = method.getText();
+    const relativeEnd = code.indexOf('(');
+    const name = method.getName();
+    const replace: AsyncGeneratorHelp.ReplacementElement = {
+        start : start,
+        end : start + relativeEnd,
+        text: `async *${name}`,
+    }    
+    AsyncGeneratorHelp.ReplacementCache.set(replacedId, targetFile, replace);
 }
 
 /**
@@ -117,19 +118,17 @@ export const methodToAsyncGeneratorAnotherFile = function(method: MethodDeclarat
  * @param targetFile 
  */
 export const funcToAsyncGeneratorAnotherFile = function(func: FunctionExpression, targetFile: SourceFile) {
-    const body = func.getBody();
-    if(body){
-        const bodyText = body.getText();
-        const params = func.getParameters();
-        const name = func.getName();
-        const funcName = (name)? name: '';
-        const paramsText = params.map(p => p.getText()).join(', ');
-        func.replaceWithText(`async function* ${funcName}(${paramsText}) ${bodyText}`);
-        const replacedId = targetFile.getFilePath();
-        const replacedCode = targetFile.getText();
-        Cache.MemoryCache.set(replacedId, replacedCode);
-        //targetFile.forget(); // 読み込み直し
+    const replacedId = targetFile.getFilePath();
+    const start = func.getStart();
+    // 最初の"("までの文字数
+    const code = func.getText();
+    const relativeEnd = code.indexOf('(');
+    const replace: AsyncGeneratorHelp.ReplacementElement = {
+        start : start,
+        end : start + relativeEnd,
+        text: 'async function*',
     }
+    AsyncGeneratorHelp.ReplacementCache.set(replacedId, targetFile, replace);
 }
 /**
  * 同一ファイルでのArrow-Threadエラー

@@ -8,6 +8,37 @@ import { ViteDevServer, ResolvedConfig, normalizePath } from 'vite';
 import { SourceFile } from 'ts-morph';
 import fs from 'fs'; 
 
+
+
+type ForceErrorObj = {forceError: boolean};
+export const forceErrorObj: ForceErrorObj = {
+    forceError: false
+};
+
+export const AsyncGeneratorError = class extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'AsyncGeneratorError';
+    }
+} 
+export const AwaitError = class extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'AwaitError';
+    }
+}
+export const YieldError = class extends Error {
+    private _node: ts.Node;
+    constructor(message: string, node: ts.Node) {
+        super(message);
+        this.name = 'YieldError';
+        this._node = node;
+    }
+    get node() {
+        return this._node;
+    }
+}
+
 /** スレッドセッター*/
 export interface TargetThreadSetter {
 	targets?: string[],
@@ -82,6 +113,8 @@ export const lastErrorOverlayCache = new Map<string, number>();
  * 短い間隔でエラーが起きる場合は、２回目のエラー表示を無視するようにします。
  */ 
 export const emitError: EmitErrorWrapper = (errObj: ErrorObj) => {
+    
+    forceErrorObj.forceError = true;
 
     const errorTargetId = errObj.id;
     const now = Date.now();
@@ -122,6 +155,7 @@ export const emitError: EmitErrorWrapper = (errObj: ErrorObj) => {
             	frame: generateCodeFrame(fileContent, errObj.loc.line, errObj.loc.column)
         	}
 	    } as any);
+        console.log(errObj.message)
     }
 };
 /**

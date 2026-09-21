@@ -11,8 +11,9 @@ import * as Helper from '../../helper.ts';
  * @returns 
  */
 export const tracer = (node : Node<ts.Node>) => {
+    const startNode = node;
     if (node.getKind() === SyntaxKind.PropertyAccessExpression || node.getKind() === SyntaxKind.Identifier){
-        let traceNode = getDefinition(node);
+        let traceNode = getDefinition(node, startNode);
         const continuedCondition = (node:Node<ts.Node>|undefined) => {
             if(node) {
                 return ( 
@@ -29,7 +30,7 @@ export const tracer = (node : Node<ts.Node>) => {
 
         while( trace) {
             if(traceNode){
-                traceNode = getDefinition(traceNode);
+                traceNode = getDefinition(traceNode, startNode);
             }
             trace = continuedCondition(traceNode);
         }
@@ -49,9 +50,10 @@ export const tracer = (node : Node<ts.Node>) => {
 /**
  * 
  * @param {Node<ts.Node>} node 
+ * @param {Node<ts.Node>} startNode  
  * @returns 
  */
-const getDefinition = (node: Node<ts.Node>) => {
+const getDefinition = (node: Node<ts.Node>, startNode: Node<ts.Node>) => {
     if (node.getKind() === SyntaxKind.PropertyAccessExpression){
         const propertyAccessExpression = node.asKindOrThrow(SyntaxKind.PropertyAccessExpression);
         const symbol = propertyAccessExpression.getNameNode().getSymbol();
@@ -65,10 +67,37 @@ const getDefinition = (node: Node<ts.Node>) => {
             // の場合には複数の MethodDeclaration が1つのシンボルに紐づくケースがある。
             // 別々のクラスで定義された同名メソッドが、ユニオン型などの交差によって1つのシンボルとして
             // 見なされた場合にも、配列に複数含まれることがある。
-            const methodDecl = declarations.find(d => d.getKind() === SyntaxKind.MethodDeclaration);
-            if(methodDecl && methodDecl.getKind() == SyntaxKind.MethodDeclaration){
-                return methodDecl;
+            const methodDecls = declarations.filter(d => d.getKind() === SyntaxKind.MethodDeclaration);
+            if(methodDecls.length == 1){
+                const methodDecl = methodDecls[0];
+                if(methodDecl && methodDecl.getKind() == SyntaxKind.MethodDeclaration){
+                    return methodDecl;
+                }
+            }else if(methodDecls.length > 1) {
+                const sourceFile = startNode.getSourceFile();
+                const id = sourceFile.getFilePath();
+                // 行番号
+                const lineNo = startNode.getStartLineNumber();
+                // 列番号 = ノード全体の開始位置 - 行の開始位置 + 1 
+                const columnNo = startNode.getStart() - startNode.getStartLinePos() + 1;
+                // エラー
+                const errObj: Helper.ErrorObj = {
+                    message: "セッター定義が一意に定まるようにコードを見直してください[001]",
+                    id: id,
+                    loc: {
+                        line: lineNo,
+                        column: columnNo
+                    }, 
+                    customSend: true,
+                }
+                Helper.emitError(errObj);
+                Helper.forceErrorObj.forceError = true;
             }
+            // const methodDecl = declarations.find(d => d.getKind() === SyntaxKind.MethodDeclaration);
+            // if(methodDecl && methodDecl.getKind() == SyntaxKind.MethodDeclaration){
+            //     return methodDecl;
+            // }
+
             // PropertyAssignmentは基本的に最大１個だけなので find() で取得してよい（例外の補足⇒※２）
             // 例外補足２： 例外事項は無視する
             // 1つのオブジェクト内に同じキー（プロパティ名）を複数書くことは通常ありえない。
@@ -77,29 +106,58 @@ const getDefinition = (node: Node<ts.Node>) => {
             // しかしts-morph の型チェッカー（TypeChecker）経由でシンボルを取得した場合、
             // 異なる場所にある複数のオブジェクトリテラルが、型推論によって1つの共通のプロパティシンボルに
             // 集約されることがある。
-            const propertyDecl = declarations.find(d => d.getKind() === SyntaxKind.PropertyAssignment);
-            if(propertyDecl && propertyDecl.getKind()==SyntaxKind.PropertyAssignment) {
-                const propertyAssgnment = propertyDecl.asKindOrThrow(SyntaxKind.PropertyAssignment)
-                const right = propertyAssgnment.getLastChild();
-                if(right){
-                    if(right.getKind()=== SyntaxKind.FunctionExpression){
-                        return right;
-                    }
-                    if(right.getKind()=== SyntaxKind.ArrowFunction) {
-                        return right;
-                    }
-                    if(right.getKind() === SyntaxKind.PropertyAccessExpression) {
-                        //console.log(right.getText(), right.getKindName());
-                        return right;
-                    }
-                    if(right.getKind() === SyntaxKind.Identifier) {
-                        //console.log(right.getText(), right.getKindName());
-                        return right;                    
+            const propertyDecls = declarations.filter(d => d.getKind() === SyntaxKind.PropertyAssignment);
+            if(propertyDecls.length == 1){
+                const propertyDecl = propertyDecls[0];
+                if(propertyDecl && propertyDecl.getKind()==SyntaxKind.PropertyAssignment) {
+                    const propertyAssgnment = propertyDecl.asKindOrThrow(SyntaxKind.PropertyAssignment)
+                    const right = propertyAssgnment.getLastChild();
+                    if(right){
+                        if(right.getKind()=== SyntaxKind.FunctionExpression){
+                            return right;
+                        }
+                        if(right.getKind()=== SyntaxKind.ArrowFunction) {
+                            return right;
+                        }
+                        if(right.getKind() === SyntaxKind.PropertyAccessExpression) {
+                            //console.log(right.getText(), right.getKindName());
+                            return right;
+                        }
+                        if(right.getKind() === SyntaxKind.Identifier) {
+                            //console.log(right.getText(), right.getKindName());
+                            return right;                    
+                        }
                     }
                 }
+            }else if(propertyDecls.length > 1) {
+                const sourceFile = startNode.getSourceFile();
+                const id = sourceFile.getFilePath();
+                // 行番号
+                const lineNo = startNode.getStartLineNumber();
+                // 列番号 = ノード全体の開始位置 - 行の開始位置 + 1 
+                const columnNo = startNode.getStart() - startNode.getStartLinePos() + 1;
+                // エラー
+                const errObj: Helper.ErrorObj = {
+                    message: "セッター定義が一意に定まるようにコードを見直してください[002]",
+                    id: id,
+                    loc: {
+                        line: lineNo,
+                        column: columnNo
+                    }, 
+                    customSend: true,
+                }
+                Helper.emitError(errObj);
+
+                Helper.forceErrorObj.forceError = true;
+            }else{
+                //const propertyDecl = declarations.find(d => d.getKind() === SyntaxKind.PropertyAssignment);
+                console.log("想定外ルート[001] ", node.getText(), node.getKindName());
+
             }
-            console.log("想定外ルート[001] ", node.getText(), node.getKindName());
         }
+    }
+    if(Helper.forceErrorObj.forceError){
+        return;
     }
     if (node.getKind() === SyntaxKind.Identifier) {
         // 右側が identifier

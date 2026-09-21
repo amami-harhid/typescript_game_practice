@@ -4,6 +4,9 @@ import type { ThreadCaller } from "../engine";
 import { Entity } from "../entity";
 
 export interface IThread {
+    /**
+     * @needsAsyncGenerator
+     */
     set func(f: ThreadCaller);
 }
 
@@ -28,9 +31,6 @@ export class SpriteBase extends Entity{
     get Thread() : IThread {
         const _me = this;
         return {
-            /**
-             * @needsAsyncGenerator
-             */
             set func(f: ThreadCaller){
                 const _f = f.bind(_me);
                 Engine.addThread( _f );        

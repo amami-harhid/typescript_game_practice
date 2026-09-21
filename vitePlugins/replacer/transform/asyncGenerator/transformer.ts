@@ -17,6 +17,8 @@ import * as path from 'path';
 import * as Helper from '../../helper.ts';
 import * as REPLACER from './asyncGeneratoReplacer.ts';
 import * as RightExpression from './asyncGeneratorRightExpression.ts'
+import * as AsyncGeneratorHelp from './asyncGeneratorHelper.ts';
+import * as MemoryCache from '../../memoryCache.ts';
 
 // トランスフォーマーを呼び出すごとに新しくProjectを作る
 function getOrInitProject(): Project {
@@ -41,6 +43,15 @@ function getOrInitProject(): Project {
  * @returns 
  */
 export function transform(code: string, id: string ): { code: string; map: any, forceError: boolean } {
+
+    if(Helper.forceErrorObj.forceError) {
+        return {
+            code : code,
+            map: null,
+            forceError: true,
+        };                
+    }
+    
     const magicString = new MagicString(code)
     const currentProject = getOrInitProject();
     const sourceFile = currentProject.createSourceFile(id, code, { overwrite: true });
@@ -113,6 +124,34 @@ export function transform(code: string, id: string ): { code: string; map: any, 
             }
         }
     };
+    
+    for(const fileName of AsyncGeneratorHelp.ReplacementCache.keys()){
+        const elements = AsyncGeneratorHelp.ReplacementCache.get(fileName);
+        if(elements){
+            const targetFile = AsyncGeneratorHelp.ReplacementCache.getSourceFile(fileName);
+            if(targetFile){
+                const _code = targetFile.getText();
+                const _magicString = new MagicString(_code);
+                for(const element of elements ) {
+
+                    _magicString.overwrite(element.start, element.end, element.text);
+                
+                }
+                const _map = _magicString.generateMap(
+                    {
+                        hires: true,
+                        source: path.basename(fileName),
+                        includeContent: true,
+                    }
+                );
+                const _replaceCode = _magicString.toString();
+                //console.log('fileName=', fileName);
+                //console.log('newCode=', _replaceCode)
+                MemoryCache.MemoryCache.set(fileName, _replaceCode, _map);
+            }
+
+        }
+    }
 
     // magic-string を使って、安全に一括置換を行う
     //console.log('REPLACER.replacements=', REPLACER.replacements)
