@@ -1,7 +1,6 @@
 import * as ts from 'typescript';
 import { Node, SyntaxKind } from "ts-morph";
 import * as Helper from '../../helper.ts';
-import { AsyncGeneratorError } from './asyncGeneratorError.ts';
 
 /**
  * スレッドセッターに代入する「ノード」の定義を追跡し
@@ -138,10 +137,8 @@ const getDefinition = (node: Node<ts.Node>, startNode: Node<ts.Node>) => {
                     }, 
                     customSend: true,
                 }
+                Helper.emitError(errObj);
                 Helper.forceErrorObj.forceError = true;
-                const error = new AsyncGeneratorError(errObj);
-                throw error;
-                //Helper.emitError(errObj);
             }else{
                 //console.log('想定外 [001] ')
 

@@ -40,7 +40,7 @@ const test3 = function (this:CustomSprite) {
     // ずっと繰り返す
     for(;;){
 
-        if(this.degree == 0){                
+        if(this.degree == 0){
             continue;
         }
         if(this.degree == 90){
@@ -48,7 +48,7 @@ const test3 = function (this:CustomSprite) {
         }
         this.Control.wait(2);
         muki *= -1;
-
+        
     }
 }
     

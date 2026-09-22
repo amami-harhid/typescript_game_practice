@@ -9,7 +9,7 @@ import * as AsyncGenerator from './transform/asyncGenerator/transformer.ts';
 import * as AsyncGeneratorHelper from './transform/asyncGenerator/asyncGeneratorHelper.ts';
 import * as Await from './transform/await/transformer.ts';
 import * as LoopYield from './transform/loopYield/transformer.ts';
-import { AsyncGeneratorError } from './transform/asyncGenerator/asyncGeneratorError.ts';
+
 
 export function vitePluginAutoReplacer(
 	tagMarks: Helper.TagMarks, 

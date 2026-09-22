@@ -38,6 +38,19 @@ sprite.Thread.func = function(this: Sprite) {
         this.Control.wait(1);
 }
 
+// sprite.Thread.func = () => {
+
+// }
+
+const funcError = async function*(this: Sprite) {
+    for(;;){
+        await this.Control.wait(1);
+    }
+}
+
+funcError.bind(sprite)();
+
+
 const func001 = function(this: Sprite) {
     for(;;)
         //console.log("002 - direct function()")
@@ -65,8 +78,8 @@ const customSprite01 = new Custom.CustomSprite01();
 customSprite01.Thread.func = customSprite01.thread001;
 customSprite01.Thread.func = customSprite01.thread002;
 
-type TestObj = {id?:string, func: CallableFunction};
-const testObje: TestObj[] = [
+
+const testObje2 = [
 
     {func: function(this:Sprite) {
         console.log('#00001 ')
@@ -76,20 +89,50 @@ const testObje: TestObj[] = [
 
     // }},
 ]
+customSprite01.Thread.func = testObje2[0].func;
 
-const testObje2 = [
+const threadObjAdd91 = {
+    func: function(this:Sprite){
 
-    {func: function(this:Sprite) {
-        console.log('#00001 ')
-    }},
-    {id:"bbb",func: function(this:Sprite) {
-        console.log('#00002')
+    }
+}
 
-    }},
-]
-customSprite01.Thread.func = testObje2[100].func;
-customSprite01.Thread.func = testObje[0].func;
+customSprite01.Thread.func = threadObjAdd91.func;
 
+
+//type TestObj = {id?:string, func: ()=>void};
+
+
+const threadObjAdd_91 = {
+    id: '0001',
+    func: function(this:Sprite){
+
+    }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// const threadObjAdd_92: TestObj = {
+//     id: '0001',
+//     func: function(this:Sprite){
+
+//     }
+// }
+
+customSprite01.Thread.func = threadObjAdd_91.func;
+
+// const testObje: TestObj[] = [
+
+//     {func: function(this:Sprite) {
+//         console.log('#00001 ')
+//     }},
+//     // {id:"bbb",func: function(this:Sprite) {
+//     //     console.log('#00002')
+
+//     // }},
+// ]
+
+// // ==> 一意に定まらない
+// customSprite01.Thread.func = testObje[0].func;
 
 
 

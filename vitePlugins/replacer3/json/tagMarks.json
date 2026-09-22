@@ -1,0 +1,5 @@
+{
+    "LOOP_YIELD_SKIP_TAG": "@ts-loop-yield-skip",
+    "THREAD_SETTER_TAG" : "@needsAsyncGenerator",
+    "NEEDS_AWAIT_METHOD_TAG" : "@needsAwait"
+}

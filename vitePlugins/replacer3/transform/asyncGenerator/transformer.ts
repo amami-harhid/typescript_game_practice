@@ -19,7 +19,6 @@ import * as REPLACER from './asyncGeneratoReplacer.ts';
 import * as RightExpression from './asyncGeneratorRightExpression.ts'
 import * as AsyncGeneratorHelp from './asyncGeneratorHelper.ts';
 import * as MemoryCache from '../../memoryCache.ts';
-import { AsyncGeneratorError } from './asyncGeneratorError.ts';
 
 // トランスフォーマーを呼び出すごとに新しくProjectを作る
 function getOrInitProject(): Project {
@@ -44,20 +43,6 @@ function getOrInitProject(): Project {
  * @returns 
  */
 export function transform(code: string, id: string ): { code: string; map: any, forceError: boolean } {
-    try{
-        const result = _transform(code, id);
-        return result;
-    }catch(error){
-        if(error instanceof AsyncGeneratorError) {
-            const errorObj = error.errorObj;
-            Helper.emitError(errorObj);
-            return { code: code, map: null, forceError: true };
-        }
-        throw error;
-    }
-}
-
-function _transform(code: string, id: string ): { code: string; map: any, forceError: boolean } {
 
     if(Helper.forceErrorObj.forceError) {
         return {

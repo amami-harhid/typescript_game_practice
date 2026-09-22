@@ -1,7 +1,7 @@
 import * as ts from 'typescript';
 import * as Helper from '../../helper.ts';
 import type { ErrorObj } from '../../helper.ts';
-import { LoopYieldError } from './loopYieldError.ts';
+
 type Visit = (node: ts.Node, inLoop?: boolean) => ts.Node;
 
 interface PluginError extends Error {
@@ -218,19 +218,6 @@ export const transform = (
 ) => {
     return (rootNode: ts.SourceFile) => {
         function visit(node: ts.Node, inLoop = false): ts.Node {
-            try {
-                const result = _visit(node, inLoop);
-                return result;
-            }catch(error){
-                if(error instanceof LoopYieldError){
-                    const errObj = error.errorObj;
-                    Helper.emitError(errObj);
-                    return node;
-                }
-                throw error;
-            }
-        }
-        function _visit(node: ts.Node, inLoop = false): ts.Node {
             if(Helper.forceErrorObj.forceError){
                 return node;
             }
@@ -265,9 +252,7 @@ export const transform = (
                         loc: { line: info.line, column: info.column }, // オプション: エラー箇所の行・列
                         customSend : true,
                     }
-                    const error = new LoopYieldError(errObj);
-                    throw error;
-                    //Helper.emitError(errObj);
+                    Helper.emitError(errObj);
                 }
                 if(parent){
                     // 親関数が generator/asyncGeneratorでないときはエラーとする
@@ -279,9 +264,7 @@ export const transform = (
                             loc: { line: info.line, column: info.column }, // オプション: エラー箇所の行・列
                             customSend : true,
                         }
-                        const error = new LoopYieldError(errObj);
-                        throw error;
-                        //Helper.emitError(errObj);
+                        Helper.emitError(errObj);
                     }
                 }
                 if(Helper.forceErrorObj.forceError){

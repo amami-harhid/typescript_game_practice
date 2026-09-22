@@ -3,7 +3,8 @@ import { ArrowFunction, Expression, Node, SourceFile, SyntaxKind } from "ts-morp
 import * as Helper from '../../helper.ts';
 import * as Replacer from './asyncGeneratoReplacer.ts';
 import { tracer } from './tracer.ts';
-import { AsyncGeneratorError } from './asyncGeneratorError.ts';
+import * as AsyncGeneratorHelper from './asyncGeneratorHelper.ts';
+
 /**
  * スレッドセッターへ格納する「何か」の定義元を探索し、探索し終わったときの後始末
  * 
@@ -120,18 +121,14 @@ export const replacer = (id:string, rightExpression: Expression<ts.Expression>, 
         if(finalNode == undefined){
             //console.log('finalNode is undefined [001]');
             const errObj = outSideError(rightExpression);
-            //Helper.emitError(errObj);
-            const error = new AsyncGeneratorError(errObj);
-            throw error;
+            Helper.emitError(errObj);
         }
         if(finalNode){
             if(finalNode.getKind()===SyntaxKind.PropertySignature){
                 Helper.forceErrorObj.forceError = true;
                 hasChanged = false;
                 const errObj = propertySignatureError(rightExpression);
-                const error = new AsyncGeneratorError(errObj);
-                throw error;
-                //Helper.emitError(errObj);
+                Helper.emitError(errObj);
             }else{
                 const rtn = finalNodeAction(id, finalNode, sourceFile);
                 hasChanged = rtn.hasChanged;
@@ -145,9 +142,7 @@ export const replacer = (id:string, rightExpression: Expression<ts.Expression>, 
         const finalNode = tracer(rightIdentifier);
         if(finalNode == undefined){
             const errObj = outSideError(rightExpression);
-            const error = new AsyncGeneratorError(errObj);
-            throw error;
-            //Helper.emitError(errObj);
+            Helper.emitError(errObj);
         }
         if(finalNode){
             const rtn = finalNodeAction(id, finalNode, sourceFile);

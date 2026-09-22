@@ -1,9 +1,8 @@
-import { Project, PropertyAccessExpression, SyntaxKind } from 'ts-morph';
+import { JSDocTagInfo, Project, PropertyAccessExpression, Symbol, SyntaxKind } from 'ts-morph';
 import MagicString from 'magic-string';
 import * as path from 'path';
 import type { ErrorObj } from '../../helper.ts';
 import * as Helper from '../../helper.ts';
-import { AwaitError } from './awaitError.ts';
 
 /** トランスフォーマーを呼び出すごとに新しくProjectを作る */ 
 function getOrInitProject(): Project {
@@ -27,24 +26,6 @@ function getOrInitProject(): Project {
  * @returns 
  */
 export function transform(
-    code: string, 
-    id: string
-): { code: string; map: any, forceEnd: boolean } {
-
-    try{
-        const result = _transform(code, id);
-        return result;
-    }catch(error){
-        if(error instanceof AwaitError) {
-            const errObj = error.errorObj;
-            Helper.emitError(errObj);
-            return {code: code, map: null, forceEnd: true};
-        }
-        throw error;
-    }
-
-}
-function _transform(
     code: string, 
     id: string
 ): { code: string; map: any, forceEnd: boolean } {
@@ -147,10 +128,8 @@ function _transform(
                                         loc: { line: lineNo, column: columnNo }, // オプション: エラー箇所の行・列
                                         customSend: true,
                                     };
-                                    const error = new AwaitError(errObj);
-                                    throw error;
-                                    //Helper.emitError(errObj);
-                                    //return {code: code, map: null, forceEnd: true};
+                                    Helper.emitError(errObj);
+                                    return {code: code, map: null, forceEnd: true};
                                 }else{
                                     const start = callExpr.getStart();
                                     // 左側に("await ")を追加する

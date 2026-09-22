@@ -2,7 +2,6 @@ import * as ts from 'typescript';
 import { Expression, SyntaxKind, SourceFile, MethodDeclaration, FunctionExpression, ArrowFunction } from 'ts-morph';
 import * as Helper from '../../helper.ts';
 import * as AsyncGeneratorHelp from './asyncGeneratorHelper.ts'
-import { AsyncGeneratorError } from './asyncGeneratorError.ts';
 
 /**
  * 置換位置を記録するための配列
@@ -148,9 +147,7 @@ export const arrowFuncErrorAction = function(id: string, func: ArrowFunction, so
         loc: { line: lineNo, column: columnNo }, // オプション: エラー箇所の行・列
         customSend: true,
     };
-    const error = new AsyncGeneratorError(errObj);
-    throw error;
-    //Helper.emitError(errObj);
+    Helper.emitError(errObj);
 }
 /**
  * 別ファイルの置換時のArrow-Threadエラー処理
@@ -174,7 +171,5 @@ export const arrowFuncErrorActionAnotherFile = function(func: ArrowFunction) {
         loc: { line: lineNo, column: columnNo }, // オプション: エラー箇所の行・列
         customSend: true,
     };
-    const error = new AsyncGeneratorError(errObj);
-    throw error;
-    //Helper.emitError(errObj);
+    Helper.emitError(errObj);
 }

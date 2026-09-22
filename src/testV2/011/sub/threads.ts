@@ -49,10 +49,10 @@ export const obj01 = {
         for(;;)
             console.log('obj01_04'+p);
     },
-    // obj01_05 : (p:string) =>{
-    //     for(;;)
-    //         console.log('obj01_04'+p);
-    // },
+    obj01_05 : () =>{
+        // for(;;)
+        //     console.log('obj01_04'+p);
+    },
 };
 
 export const obj02 = {
@@ -79,5 +79,21 @@ export const obj02 = {
 }
 
 const outSideFunction = outSideFunc;
+
+
+// @ts-loop-yield-skip
+for(;;){
+    console.log('yield付与できない(関数なし)')
+    break;
+}
+
+async function error (this:CustomSprite02) {
+    // @ts-loop-yield-skip
+    for(;;){
+        console.log('yield付与できない(関数あり)')
+        break;
+    }
+}
+error.bind(customSprite02)();
 
 export {outSideFunction}
