@@ -81,7 +81,7 @@ export const obj02 = {
 const outSideFunction = outSideFunc;
 
 
-// @ts-loop-yield-skip
+// @ ts-loop-yield-skip
 for(;;){
     console.log('yield付与できない(関数なし)')
     break;

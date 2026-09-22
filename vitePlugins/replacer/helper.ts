@@ -128,6 +128,8 @@ export const emitError: EmitErrorWrapper = (errObj: ErrorObj) => {
 			throw e;
     	}
     	// Viteのクライアントへ直接エラーイベントを発火（Viteがパスを上書きするのを防ぐ）
+        const codeFrame = generateCodeFrame(fileContent, errObj.loc.line, errObj.loc.column);
+        console.log(`id=${errObj.id}\n${codeFrame}`);
         setTimeout(()=>{
     	server.ws.send({
     		type: 'error',
@@ -139,7 +141,7 @@ export const emitError: EmitErrorWrapper = (errObj: ErrorObj) => {
             	// stack プロパティが必須なので、簡易的なトレース文字列を生成して渡す
             	stack: `Error: ${errObj.message}\n    at ${errObj.id}:${errObj.loc.line}:${errObj.loc.column}`,
         		// エラー箇所の周辺コードスニペットを組み立てて渡す（ViteのError Overlay用）
-            	frame: generateCodeFrame(fileContent, errObj.loc.line, errObj.loc.column)
+            	frame: codeFrame
         	}
 	    } as any);
             
@@ -160,13 +162,14 @@ const generateCodeFrame = (code: string, line: number, column: number): string =
 	const lines = code.split('\n');
 	const start = Math.max(0, line - 3);
 	const end = Math.min(lines.length, line + 3);
-	return lines.slice(start, end).map((l, i) => {
+	const codeFrame = lines.slice(start, end).map((l, i) => {
 		const currentLineNum = start + i + 1;
 		const isTarget = currentLineNum === line;
 		const prefix = isTarget ? `> ${currentLineNum} | ` : `  ${currentLineNum} | `;
 		const pointer = isTarget ? `\n    | ${' '.repeat(column - 1)}^` : '';
 		return `${prefix}${l}${pointer}`;
 	}).join('\n');
+    return codeFrame;
 }
 
 type SERVER = {server : ViteDevServer | null};
