@@ -1,10 +1,31 @@
 {
-  "targets": [
-        "Thread.func",
-        "Event.func"
-    ],
-   "targetsRegExp": [
-        { "pattern": "\\.Thread\\.func$" }
+     "targets": [
+          "Thread.func",
+          "Event.func"
+     ],
+     "targetsRegExp": [
+          { 
+               "comment": "xxx.Thread.func", 
+               "pattern": "\\.Thread\\.func$" },
+          {
+               "comment": "xxx.Event.flagPressor().func",
+               "pattern": "\\.Event\\.flagPresser\\(\\)\\.func$" 
+          },
+          {
+               "comment": "xxx.Evnet.keyPresser( CONSTANT ).func",
+               "pattern": "\\.Event\\.keyPresser\\(\\s*(?:\"[^\"]*\"|'[^']*'|[a-zA-Z_]\\w*)\\s*\\)\\.func$"
+          },
+          { 
+               "comment": "xxx.Broadcast.receiver( CONSTANT ).func",
+               "pattern": "\\.Broadcast\\.receiver\\(\\s*(?:\"[^\"]*\"|'[^']*'|[a-zA-Z_]\\w*)\\s*\\)\\.func$" 
+          },
+          { 
+               "pattern": "\\.Event\\.keyPresser\\(\\s*(?:\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*'|[a-zA-Z_]\\w*)\\s*\\)\\.func$"
+          },
+          { 
+               "pattern": "\\.Broadcast\\.receiver\\(\\s*(?:\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*'|[a-zA-Z_]\\w*)\\s*\\)\\.func$" 
+          }
+
    ]
 
 }

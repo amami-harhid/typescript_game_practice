@@ -28,7 +28,7 @@ export const YieldError = class extends Error {
 /** スレッドセッター*/
 export interface TargetThreadSetter {
 	targets?: string[],
-    targetsRegExp?: {pattern: string, flags?: string}[],
+    targetsRegExp?: {pattern: string, flags?: string, comment?: string}[],
 }
 /** タグマーク */
 export interface TagMarks {
