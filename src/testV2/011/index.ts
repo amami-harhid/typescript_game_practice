@@ -6,6 +6,10 @@ import * as Custom from './sub/customSprite';
 
 const sprite = new Lib.Sprite();
 
+sprite.Broadcast.receiver('aaaaa').func = function(this:Sprite){
+    console.log('aaaaaaaa');
+}
+
 sprite.Thread.func = Thread.CustomSpriteObj01.thread01_01;
 
 sprite.Thread.func = Thread.CustomSpriteObj01.thread01_02;

@@ -84,12 +84,42 @@ function _transform(code: string, id: string ): { code: string; map: any, forceE
             if (leftExpression.getKind() === SyntaxKind.PropertyAccessExpression) {
 
                 const leftText = leftExpression.getText();
+                const children = leftExpression.getChildren();
+                
+                let _nodeText = "";
+                console.log('leftText=', leftText);
+                for(const child of children){
+                    if(child.getKind()===SyntaxKind.CallExpression){
+                        //console.log('child=', child.getText(), " : kind=", child.getKindName());
+                        const _children = child.getChildren();
+                        for(const _child of _children){
+                            if(!(_child.getKind()===SyntaxKind.OpenParenToken 
+                                || _child.getKind()===SyntaxKind.CloseParenToken 
+                                || _child.getKind()===SyntaxKind.SyntaxList)) {
+                                _nodeText += _child.getText();
+                                //console.log('_child=', _child.getText(), ' : kind=', _child.getKindName());
+                            }
+                        }
+
+                    }else if(child.getKind()===SyntaxKind.Identifier){
+                        _nodeText += child.getText();
+                        //console.log('child=', child.getText(), " : kind=", child.getKindName());
+                    
+                    }else if(child.getKind()===SyntaxKind.PropertyAccessExpression){
+                        _nodeText += child.getText();
+                        //console.log('child=', child.getText(), " : kind=", child.getKindName());
+                    
+                    }else if(child.getKind()===SyntaxKind.DotToken){
+                            _nodeText += child.getText();
+                    }
+                }
+                console.log('_nodeText=', _nodeText);
                 // 特定のパターン（例：末尾が .Thread.func）にマッチするか確認
                 // targetThreadSetter.json の targetsRegExp.pattern の正規表現で検証する
                 let regexThreadSetterMatch = false;
                 if( Helper.regexpObj.regexThreadSetter ){
                     for(const regexp of Helper.regexpObj.regexThreadSetter) {
-                        const _match = regexp.test(leftText)
+                        const _match = regexp.test(_nodeText)
                         if(_match){
                             regexThreadSetterMatch = true;
                             break;

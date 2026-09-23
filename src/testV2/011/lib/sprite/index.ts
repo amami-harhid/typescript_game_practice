@@ -1,6 +1,6 @@
 import { IEntityControl } from "../entity/entityControl";
 import { SpriteBase } from "./base";
-import { IThread } from "./base";
+import { IThread, IBroadcast } from "./base";
 export interface StaticSprite {
     new (): ISprite;
 }
@@ -10,6 +10,7 @@ export interface ISprite {
     get position(): {x: number, y: number};
     readonly Thread: IThread;
     readonly Control: IEntityControl;
+    readonly Broadcast : IBroadcast; 
 
 }
 export class Sprite extends SpriteBase implements ISprite{

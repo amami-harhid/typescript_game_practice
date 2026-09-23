@@ -10,6 +10,16 @@ export interface IThread {
     set func(f: ThreadCaller);
 }
 
+export interface IBroadcast {
+    receiver(id: string): {
+        /**
+         * @needsAsyncGenerator
+         */
+        set func(f: ThreadCaller);
+
+    }
+}
+
 export class SpriteBase extends Entity{
 
     protected _engine: Engine;
@@ -36,6 +46,22 @@ export class SpriteBase extends Entity{
                 Engine.addThread( _f );        
             }
         };
+    }
+    get Broadcast(): IBroadcast {
+        const _me = this;
+        return {
+            receiver(id: string) {
+                console.log('messageId=',id);
+                return {
+                    // @needsAsyncGenerator
+                    set func(f: ThreadCaller) {
+                        const _f = f.bind(_me);
+                        Engine.addThread(_f);
+                    }
+                }
+            }
+
+        }
     }
     draw() {
         

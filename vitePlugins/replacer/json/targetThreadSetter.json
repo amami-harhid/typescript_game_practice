@@ -17,7 +17,7 @@
           },
           { 
                "comment": "xxx.Broadcast.receiver( CONSTANT ).func",
-               "pattern": "\\.Broadcast\\.receiver\\(\\s*(?:\"[^\"]*\"|'[^']*'|[a-zA-Z_]\\w*)\\s*\\)\\.func$" 
+               "pattern": "\\.Broadcast\\.receiver\\.func$" 
           },
           { 
                "pattern": "\\.Event\\.keyPresser\\(\\s*(?:\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*'|[a-zA-Z_]\\w*)\\s*\\)\\.func$"
