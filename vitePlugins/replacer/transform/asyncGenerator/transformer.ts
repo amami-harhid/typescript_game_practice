@@ -87,7 +87,7 @@ function _transform(code: string, id: string ): { code: string; map: any, forceE
                 const children = leftExpression.getChildren();
                 
                 let _nodeText = "";
-                console.log('leftText=', leftText);
+                //console.log('leftText=', leftText);
                 for(const child of children){
                     if(child.getKind()===SyntaxKind.CallExpression){
                         //console.log('child=', child.getText(), " : kind=", child.getKindName());
@@ -113,7 +113,7 @@ function _transform(code: string, id: string ): { code: string; map: any, forceE
                             _nodeText += child.getText();
                     }
                 }
-                console.log('_nodeText=', _nodeText);
+                //console.log('_nodeText=', _nodeText);
                 // 特定のパターン（例：末尾が .Thread.func）にマッチするか確認
                 // targetThreadSetter.json の targetsRegExp.pattern の正規表現で検証する
                 let regexThreadSetterMatch = false;

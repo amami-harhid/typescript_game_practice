@@ -5,8 +5,8 @@ import { outSideFunc } from '../../../lib/test';
 import * as Custom from './sub/customSprite';
 
 const sprite = new Lib.Sprite();
-
-sprite.Broadcast.receiver('aaaaa').func = function(this:Sprite){
+const MessageId = 'aaaaa';
+sprite.Broadcast.receiver(MessageId).func = function(this:Sprite){
     console.log('aaaaaaaa');
 }
 

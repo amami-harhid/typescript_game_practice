@@ -1,5 +1,6 @@
 {
   "exclude": [
+        "**/**/*.css",
         "**/lib/**",
         "**/node_modules/**",
         "virtual:*"
