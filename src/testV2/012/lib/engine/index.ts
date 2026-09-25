@@ -83,28 +83,7 @@ export class Engine {
     static addThread( f: ThreadCaller) {
         Engine.threads.push(f);
     }
-
     static async run() {
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-
-        const body = document.querySelector('body') as HTMLBodyElement;
-        const greenFlagWrapper = document.querySelector('.greenFlagWrapper') as HTMLDialogElement;
-        const greenFlag = document.querySelector('#greenFlag') as HTMLDivElement;
-        greenFlag.style = `width:${w}px;height:${h}px;`;
-        greenFlagWrapper.style = `height:${h}px`;
-
-        const greenFlagSize = (w>h)? h*0.3: w*0.3;
-        const divGreenFlag = document.querySelector("div.greenFlag") as HTMLDivElement;
-        divGreenFlag.style = `width:${greenFlagSize}px;height:${greenFlagSize}px`;
-        window.addEventListener('click', function(){
-            body.style = "background-color: #00000000"
-            greenFlag.style = "position:absolute; display: none; width:100%;height:800px;"
-            Engine._innnerRun();
-        });
-    }
-    private static async _innnerRun() {
-        
         const engine = Engine.getInstance();
         const _loads: Promise<void>[] = [];
         //@ts-loop-yield-skip
