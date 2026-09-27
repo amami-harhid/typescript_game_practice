@@ -14,9 +14,11 @@
     "devDependencies": {
         "@ampproject/remapping": "^2.3.0",
         "@babel/core": "^7.29.7",
+        "@types/events": "^3.0.3",
         "@types/node": "^25.9.1",
         "eslint": "^9.39.4",
         "estree-walker": "^3.0.3",
+        "events": "^3.3.0",
         "glob": "^10.5.0",
         "magic-string": "^1.1.1",
         "minimatch": "^10.2.6",

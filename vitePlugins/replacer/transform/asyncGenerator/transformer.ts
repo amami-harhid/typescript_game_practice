@@ -120,6 +120,7 @@ function _transform(code: string, id: string ): { code: string; map: any, forceE
                 if( Helper.regexpObj.regexThreadSetter ){
                     for(const regexp of Helper.regexpObj.regexThreadSetter) {
                         const _match = regexp.test(_nodeText)
+                        //console.log('_nodeText=', _nodeText, '_match=', _match)
                         if(_match){
                             regexThreadSetterMatch = true;
                             break;
@@ -131,8 +132,10 @@ function _transform(code: string, id: string ): { code: string; map: any, forceE
                 //if (targetThreadSetter.targets && targetThreadSetter.targets.includes(words)) {
                     const children = leftExpression.getChildren();
                     const func = children[children.length-1]; // xxx.Thread.func のときに 最後のNode(=func)を取り出す
+                    //console.log('func.getKind()=' , func.getKindName())
                     if(func.getKind() == SyntaxKind.Identifier /* (80) */) {  
                         const setterNode = func.getParent();
+                        //console.log('setterNode=', setterNode?.getKindName())
                         if( Node.isPropertyAccessExpression(setterNode)) {
                             const propertyAccessExp = setterNode as PropertyAccessExpression;
                             // セッターの左側のJSDOCを探索し、条件に合致するときは

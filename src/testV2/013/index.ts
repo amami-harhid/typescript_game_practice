@@ -1,8 +1,7 @@
 import './sub/style.css'; 
 /**
- * スプライトに複数の画像を登録
- * costumeインスタンスを生成し、costumeに対して画像を登録する
- * そして表示する画像を切り替えるメソッドを用意する ( constume.next() )
+ * 初期表示時に 背景赤で『緑の旗』を表示
+ * 旗クリックすると スレッドが動き出す動きを作る
  */
 
 //import { Sprite } from './lib/sprite';
@@ -15,10 +14,6 @@ import { CustomSprite } from './sub/customSprite';
 const sprite = new CustomSprite();
 sprite.addImage(Cat);
 
-// sprite.Thread.func = ()=>{
-    
-// };
-
 sprite.Thread.func = threadObj.thread4;
 
 sprite.position.x = window.innerWidth/2;
@@ -30,12 +25,7 @@ sprite.Control.wait(0.1);
 let muki = -1;
 const speed = 6;
 
-// const test = function() {
-//     return true;
-// }
-
-
-const test3 = function (this:CustomSprite) {
+const test001 = function (this:CustomSprite) {
 
     this.degree = 20;
     // ずっと繰り返す
@@ -53,7 +43,7 @@ const test3 = function (this:CustomSprite) {
     }
 }
     
-sprite.Thread.func = test3;
+sprite.Thread.func = test001;
 // console.log(test());
 
 sprite.Thread.func = function (this:CustomSprite){
@@ -74,20 +64,4 @@ sprite.Thread.func = function() {
     }
 }
 
-const w = window.innerWidth;
-const h = window.innerHeight;
-
-const body = document.querySelector('body') as HTMLBodyElement;
-const greenFlagWrapper = document.querySelector('.greenFlagWrapper') as HTMLDialogElement;
-const greenFlag = document.querySelector('#greenFlag') as HTMLDivElement;
-greenFlag.style = `width:${w}px;height:${h}px;`;
-greenFlagWrapper.style = `height:${h}px`;
-
-const greenFlagSize = (w>h)? h*0.3: w*0.3;
-const divGreenFlag = document.querySelector("div.greenFlag") as HTMLDivElement;
-divGreenFlag.style = `width:${greenFlagSize}px;height:${greenFlagSize}px`;
-window.addEventListener('click', function(){
-    body.style = "background-color: #00000000"
-    greenFlag.style = "position:absolute; display: none; width:100%;height:800px;"
-    Engine.run();
-});
+Engine.run();

@@ -9,7 +9,7 @@
                "pattern": "\\.Thread\\.func$" },
           {
                "comment": "xxx.Event.flagPressor().func",
-               "pattern": "\\.Event\\.flagPresser\\(\\)\\.func$" 
+               "pattern": "\\.Event\\.flagPresser\\.func$" 
           },
           {
                "comment": "xxx.Evnet.keyPresser( CONSTANT ).func",

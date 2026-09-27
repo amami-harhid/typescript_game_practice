@@ -1,0 +1,33 @@
+div.greenFlagWrapper {
+  width: 100%;
+  height: 500px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: red;
+  border-radius: 8px;
+}
+
+div.greenFlag {
+  position: relative;
+  padding: 16px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75);
+  border: 3px solid #ffffff; /* hslaから16進数に変更 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;        
+}
+
+img.greenFlag {
+  width: 70%;
+}
+
+.customBody {
+  overflow: hidden; 
+  margin: 0; 
+  width:100%;
+}
