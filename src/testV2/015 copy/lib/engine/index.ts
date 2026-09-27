@@ -92,7 +92,7 @@ export class Engine {
     }
 
     private static threads:ThreadCaller[] = []
-    public static threadsArr :  ThreadObj[] = [];
+    public static threadsArr :  {active: boolean, start?: boolean, g: ThreadGenerator}[] = [];
     static generateThread(f: CallableFunction) : ThreadObj {
         const _f = f as unknown as ThreadGeneratorCaller;
         const g = _f();            
@@ -137,25 +137,17 @@ export class Engine {
         for( const f of Engine.threads){
             const _f = f as unknown as ThreadGeneratorCaller;
             const g = _f();            
-            Engine.threadsArr.push({active:true, g: g, f:_f});
+            Engine.threadsArr.push({active:true, g: g});
         }
         const _engine = Engine.getInstance();
         const interval = setInterval( async ()=>{
             for(const thread of Engine.threadsArr){
-                if( thread.active === true){
-                    //console.log('thread.active=',thread.active, ",thread.start=",thread.start)
+                if( thread.active === true && thread.start === true){
                     try{
                         thread.g.next().then((rtn)=>{
-                            // TODO reEnter(true)になって初めての rtn.done のときまで
-                            // thread.reEnter(⇒ false)にならないがよいか？
-                            if(thread.callback){
-                                thread.callback();
-                                thread.callback = undefined;
-                            }else{
-                                if(rtn.done === true) {
-                                    // 終了したとき
-                                    thread.active = false;
-                                }
+                            if(rtn.done === true) {
+                                // 終了したとき
+                                thread.active = false;
                             }
                         })
                     }catch(e){
@@ -166,17 +158,17 @@ export class Engine {
                 }
             }
             _engine.draw();
-            // let _stopThreads = 0;
-            // for(const thread of Engine.threadsArr){
-            //     if(thread.active === false){
-            //         _stopThreads += 1;
-            //     }
-            // }
-            // // 停止したスレッド数が全スレッド数のとき
-            // if( _stopThreads == Engine.threadsArr.length ) {
-            //     // 停止させる
-            //     clearInterval(interval);
-            // }
+            let _stopThreads = 0;
+            for(const thread of Engine.threadsArr){
+                if(thread.active === false){
+                    _stopThreads += 1;
+                }
+            }
+            // 停止したスレッド数が全スレッド数のとき
+            if( _stopThreads == Engine.threadsArr.length ) {
+                // 停止させる
+                clearInterval(interval);
+            }
             // active でないスレッドは消す
             // Engine.threadsArr = Engine.threadsArr.filter((value)=> value.active === false);
 
@@ -190,7 +182,7 @@ export type ThreadCaller = Thread;
 type ThreadGenerator =  AsyncGenerator<unknown, never, unknown>;
 type ThreadGeneratorCaller =  ()=>ThreadGenerator;
 
-export type ThreadObj = {active: boolean, start?: boolean, f:Thread ,g: ThreadGenerator, args?: any[], callback?:CallableFunction};
+export type ThreadObj = {active: boolean, start?: boolean, f:Thread ,g: ThreadGenerator, args?: any[]};
 
 /**
  * id: Eventを識別するID , Message送受信の場合は 個別のメッセージIDを含む文字列

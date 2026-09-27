@@ -13,43 +13,34 @@ sprite.position.x = window.innerWidth/2;
 sprite.position.y = window.innerHeight/2;
 
 sprite.Control.wait(0.1);
-//let count = 0;
-let muki = 0;
+let counter = 0;
 const test001 = function (this:Sprite) {
     console.log('test001 started!!!');
     this.degree = 0;
 
     this.Control.wait(2);
 
-    muki = 1;
+    counter += 1;
 
-    console.log('test001 Rotation sending');
-    this.Broadcast.send('ROTATION', muki);
-
+    this.Broadcast.send('ROTATION', counter);
 }
 
-const test002 = function (this:Sprite, muki: number) {
-    console.log('test002 started!!!', muki);
-    //this.degree = 0;
+const test002 = function (this:Sprite, count: number) {
+    console.log('test002 started!!!', count);
+    this.degree = 0;
     let counter = 0;
 
     // ずっと繰り返す
     for(;;){
-        this.degree += 5*muki;
+        this.degree += 5;
+        this.Control.wait(0);
         counter += 1;
-        // if(counter%100==0){
-        //     break;
-        // }
-        if(counter > 100){
+        if(counter>50){
             break;
         }
-        this.Control.wait(0);
     }
-    // 自分で自分を呼ぶときは要注意
-    // 自分が終了したあとに処理されるべき
-    //count+=1;
-    const nextMuki = muki * -1;
-    this.Broadcast.send('ROTATION', nextMuki);
+
+    this.Broadcast.send('NEXT_START');
 }
 
 sprite.Event.flagPresser().func = test001;

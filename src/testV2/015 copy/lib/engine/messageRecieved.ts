@@ -47,6 +47,7 @@ export class MessageReciever implements IMessageReciever {
     private _messageId: string = '';
     private _entity: Entity;
     private _funcs : ThreadCaller[] = [];
+    //private _threadArr: ThreadObj[] = [];
     constructor(entity: Entity){
         this._entity = entity;
     }
@@ -60,16 +61,11 @@ export class MessageReciever implements IMessageReciever {
                 console.log('_messageId= ', _messageId)
                 const threadArr = MessageReciever.threadsObjMap.get(_messageId);
                 if(threadArr){
-                    console.log('threadArr =', threadArr.length)
                     for(const thread of threadArr){
-                        thread.g = thread.f(...args); // Generator生成
+                        thread.g = thread.f(...args);
+                        thread.args = args;
                         thread.active = true;
-                        thread.callback = ()=>{
-                            console.log('=== callback ===')
-                            thread.args = args;
-                            thread.active = true;
-                            thread.start = true; // 開始！
-                        }
+                        thread.start = true; // 開始！
                     }
                 }
             });
